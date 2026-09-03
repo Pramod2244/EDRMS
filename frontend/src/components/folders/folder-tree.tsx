@@ -1,99 +1,100 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
+import { Folder, FolderOpen, ChevronRight, ChevronDown, Trash2 } from "lucide-react";
+import { useDocumentStore, FolderNode } from "@/stores/document-store";
 
 interface FolderTreeProps {
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null) => void;
 }
 
-interface TreeNode {
-  id: string;
-  name: string;
-  children?: TreeNode[];
-}
-
 export default function FolderTree({
   selectedFolderId,
   onSelectFolder,
 }: FolderTreeProps) {
+  const { folders, deleteFolder } = useDocumentStore();
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     "1": true,
     "2": true,
+    "3": true,
   });
-
-  const folderData: TreeNode[] = [
-    {
-      id: "1",
-      name: "Corporate & Legal",
-      children: [
-        { id: "1-1", name: "Contracts & Agreements" },
-        { id: "1-2", name: "NDAs & Compliance" },
-      ],
-    },
-    {
-      id: "2",
-      name: "Finance & Accounts",
-      children: [
-        { id: "2-1", name: "Audits 2026" },
-        { id: "2-2", name: "Invoices & Receipts" },
-      ],
-    },
-    {
-      id: "3",
-      name: "Human Resources",
-      children: [{ id: "3-1", name: "Personnel Files" }],
-    },
-  ];
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const renderTree = (nodes: TreeNode[]) => {
+  const handleDeleteFolder = (folder: FolderNode, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Delete folder "${folder.name}" and all contents?`)) {
+      deleteFolder(folder.id);
+    }
+  };
+
+  // Build recursive tree from flat list of folders
+  const buildTree = (parentId: string | null = null): FolderNode[] => {
+    return folders
+      .filter((f) => f.parentId === parentId)
+      .map((f) => f);
+  };
+
+  const renderNodes = (parentId: string | null = null) => {
+    const nodes = buildTree(parentId);
+    if (nodes.length === 0) return null;
+
     return (
-      <ul className="space-y-1 pl-2">
+      <ul className="space-y-1 pl-2.5">
         {nodes.map((node) => {
           const isExpanded = !!expandedNodes[node.id];
           const isSelected = selectedFolderId === node.id;
-          const hasChildren = node.children && node.children.length > 0;
+          const children = buildTree(node.id);
+          const hasChildren = children.length > 0;
 
           return (
             <li key={node.id}>
               <div
                 onClick={() => onSelectFolder(node.id)}
-                className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition ${
+                className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${
                   isSelected
                     ? "bg-primary/20 text-primary font-semibold"
                     : "hover:bg-secondary text-foreground"
                 }`}
               >
-                {hasChildren ? (
-                  <button
-                    onClick={(e) => toggleExpand(node.id, e)}
-                    className="p-0.5 hover:bg-secondary rounded text-muted-foreground"
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="h-3 w-3" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3" />
-                    )}
-                  </button>
-                ) : (
-                  <span className="w-4" />
-                )}
+                <div className="flex items-center space-x-2 truncate">
+                  {hasChildren ? (
+                    <button
+                      onClick={(e) => toggleExpand(node.id, e)}
+                      className="p-0.5 hover:bg-secondary rounded text-muted-foreground"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-3 w-3" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-3" />
+                  )}
 
-                {isExpanded ? (
-                  <FolderOpen className="h-4 w-4 text-primary shrink-0" />
-                ) : (
-                  <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
-                )}
-                <span className="truncate">{node.name}</span>
+                  {isExpanded ? (
+                    <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+                  ) : (
+                    <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="truncate">{node.name}</span>
+                </div>
+
+                <button
+                  onClick={(e) => handleDeleteFolder(node, e)}
+                  title="Delete Folder"
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-destructive rounded transition"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
               </div>
 
-              {hasChildren && isExpanded && renderTree(node.children!)}
+              {hasChildren && isExpanded && renderNodes(node.id)}
             </li>
           );
         })}
@@ -102,19 +103,20 @@ export default function FolderTree({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div
         onClick={() => onSelectFolder(null)}
-        className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition ${
+        className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${
           selectedFolderId === null
             ? "bg-primary/20 text-primary font-semibold"
             : "hover:bg-secondary text-foreground"
         }`}
       >
         <Folder className="h-4 w-4 text-primary shrink-0" />
-        <span>All Documents (Root)</span>
+        <span className="font-semibold">All Documents (Root)</span>
       </div>
-      {renderTree(folderData)}
+
+      {renderNodes(null)}
     </div>
   );
 }

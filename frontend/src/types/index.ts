@@ -22,7 +22,7 @@ export interface Folder {
 
 export interface DocumentItem {
   id: string;
-  folderId: string;
+  folderId: string | null;
   name: string;
   mimeType: string;
   extension: string;
