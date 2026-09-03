@@ -1,0 +1,69 @@
+package com.edrms.backend.folders;
+
+import com.edrms.backend.users.User;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+public class FolderService {
+
+    private final FolderRepository folderRepository;
+
+    public FolderService(FolderRepository folderRepository) {
+        this.folderRepository = folderRepository;
+    }
+
+    public List<Folder> getRootFolders() {
+        return folderRepository.findByParentIdIsNullAndIsDeletedFalse();
+    }
+
+    public List<Folder> getSubFolders(UUID parentId) {
+        return folderRepository.findByParentIdAndIsDeletedFalse(parentId);
+    }
+
+    public Optional<Folder> findById(UUID id) {
+        return folderRepository.findById(id).filter(f -> !f.getIsDeleted());
+    }
+
+    @Transactional
+    public Folder createFolder(String name, UUID parentId, User owner) {
+        String materializedPath = "/";
+        int depth = 0;
+
+        if (parentId != null) {
+            Folder parent = folderRepository.findById(parentId)
+                .orElseThrow(() -> new IllegalArgumentException("Parent folder not found: " + parentId));
+            materializedPath = parent.getMaterializedPath() + parent.getId() + "/";
+            depth = parent.getDepth() + 1;
+        }
+
+        Folder folder = Folder.builder()
+            .name(name)
+            .parentId(parentId)
+            .materializedPath(materializedPath)
+            .depth(depth)
+            .ownerId(owner.getId())
+            .isDeleted(false)
+            .build();
+
+        return folderRepository.save(folder);
+    }
+
+    @Transactional
+    public void deleteFolder(UUID id) {
+        folderRepository.findById(id).ifPresent(f -> {
+            f.setIsDeleted(true);
+            folderRepository.save(f);
+            // Cascade soft delete to all descendants in materialized path
+            List<Folder> descendants = folderRepository.findByMaterializedPathStartingWithAndIsDeletedFalse(
+                f.getMaterializedPath() + f.getId() + "/"
+            );
+            descendants.forEach(d -> d.setIsDeleted(true));
+            folderRepository.saveAll(descendants);
+        });
+    }
+}

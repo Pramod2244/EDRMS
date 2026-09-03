@@ -1,0 +1,11 @@
+logging:
+  level:
+    root: INFO
+    com.edrms.backend: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+spring:
+  jpa:
+    show-sql: true

@@ -1,0 +1,13 @@
+{
+  "port": 42100,
+  "allowedOrigins": [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://edrms.corp"
+  ],
+  "defaultDpi": 300,
+  "defaultColorMode": "GRAYSCALE",
+  "autoDeskew": true,
+  "removeBlankPages": true,
+  "tempDirectory": "/tmp/edrms_scans"
+}

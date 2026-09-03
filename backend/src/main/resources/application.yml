@@ -1,0 +1,84 @@
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: edrms-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edrms}
+    username: ${POSTGRES_USER:edrms_user}
+    password: ${POSTGRES_PASSWORD:edrms_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          batch_size: 50
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/realms/edrms}
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 120MB
+
+edrms:
+  storage:
+    active-provider: ${STORAGE_ACTIVE_PROVIDER:LOCAL}
+    local:
+      root-path: ${STORAGE_LOCAL_ROOT_PATH:/var/data/edrms/storage}
+    s3:
+      region: ${AWS_REGION:us-east-1}
+      bucket-name: ${AWS_S3_BUCKET_NAME:edrms-documents-bucket}
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+      endpoint: ${AWS_S3_ENDPOINT_URL:}
+
+  ocr:
+    active-engine: ${OCR_ACTIVE_ENGINE:AWS_TEXTRACT}
+    aws:
+      region: ${AWS_REGION:us-east-1}
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
+  opensearch:
+    host: ${OPENSEARCH_HOST:localhost}
+    port: ${OPENSEARCH_PORT:9200}
+    scheme: ${OPENSEARCH_SCHEME:http}
+    index-name: ${OPENSEARCH_INDEX_NAME:edrms_documents}
+
+  security:
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}

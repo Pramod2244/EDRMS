@@ -1,0 +1,30 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Build outputs & dependencies
+node_modules/
+.next/
+out/
+build/
+dist/
+target/
+*.class
+*.jar
+*.war
+
+# IDE & OS files
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Logs & Storage data
+logs/
+*.log
+/infrastructure/data/
+/var/data/

@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "EDRMS Mobile Scanner",
+    "slug": "edrms-mobile-scanner",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow EDRMS Scanner to access your camera to scan documents."
+        }
+      ]
+    ]
+  }
+}

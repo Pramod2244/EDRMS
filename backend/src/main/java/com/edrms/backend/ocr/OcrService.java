@@ -1,0 +1,37 @@
+package com.edrms.backend.ocr;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+import java.util.List;
+
+@Service
+public class OcrService {
+
+    private final List<OcrEngine> engines;
+    private final String preferredEngine;
+
+    public OcrService(
+        List<OcrEngine> engines,
+        @Value("${edrms.ocr.active-engine:AWS_TEXTRACT}") String preferredEngine
+    ) {
+        this.engines = engines;
+        this.preferredEngine = preferredEngine;
+    }
+
+    public OcrResult extractText(InputStream documentStream) {
+        for (OcrEngine engine : engines) {
+            if (engine.getEngineType().name().equalsIgnoreCase(preferredEngine) && engine.isAvailable()) {
+                return engine.process(documentStream);
+            }
+        }
+        // Fallback to first available engine
+        for (OcrEngine engine : engines) {
+            if (engine.isAvailable()) {
+                return engine.process(documentStream);
+            }
+        }
+        throw new IllegalStateException("No OCR engine available to process document");
+    }
+}
