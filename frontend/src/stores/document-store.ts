@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DocumentItem } from "@/types";
+import { useAuthStore } from "@/stores/auth-store";
 
 export interface FolderNode {
   id: string;
@@ -10,33 +11,71 @@ export interface FolderNode {
   depth: number;
 }
 
+export interface PipelineStep {
+  stepName: string;
+  status: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  metadataJson?: string;
+  errorMessage?: string;
+}
+
+export interface PipelineStatus {
+  documentId: string;
+  documentName: string;
+  status: string;
+  progressPercentage: number;
+  errorMessage?: string;
+  jobId?: string;
+  steps: PipelineStep[];
+}
+
 interface DocumentStoreState {
   folders: FolderNode[];
   documents: DocumentItem[];
   selectedFolderId: string | null;
-  activeStorageProvider: "LOCAL" | "S3";
+  activeStorageProvider: "LOCAL" | "NAS" | "S3";
   activeOcrEngine: string;
+  isLoading: boolean;
+  activePipeline: PipelineStatus | null;
 
   // Actions
+  fetchFolders: () => Promise<void>;
+  fetchDocuments: () => Promise<void>;
   selectFolder: (folderId: string | null) => void;
-  createFolder: (name: string, parentId: string | null) => FolderNode;
-  deleteFolder: (folderId: string) => void;
-  uploadDocument: (name: string, sizeBytes: number, mimeType: string, folderId: string | null) => DocumentItem;
-  deleteDocument: (documentId: string) => void;
+  createFolder: (name: string, parentId: string | null) => Promise<FolderNode | null>;
+  deleteFolder: (folderId: string) => Promise<void>;
+  uploadRealDocument: (
+    file: File,
+    folderId: string | null,
+    onProgress?: (status: PipelineStatus) => void
+  ) => Promise<DocumentItem | null>;
+  uploadDocument: (
+    name: string,
+    sizeBytes: number,
+    mimeType: string,
+    folderId: string | null,
+    fileUrl?: string,
+    pageCount?: number,
+    checksum?: string
+  ) => DocumentItem;
+  deleteDocument: (documentId: string) => Promise<void>;
   ingestFromScanner: (deviceName: string, pageCount: number, folderId: string | null) => DocumentItem;
-  setStorageProvider: (provider: "LOCAL" | "S3") => void;
+  setStorageProvider: (provider: "LOCAL" | "NAS" | "S3") => void;
   setOcrEngine: (engine: string) => void;
 }
 
 const initialFolders: FolderNode[] = [
-  { id: "1", name: "Corporate & Legal", parentId: null, materializedPath: "/1/", depth: 0 },
-  { id: "1-1", name: "Contracts & Agreements", parentId: "1", materializedPath: "/1/1-1/", depth: 1 },
-  { id: "1-2", name: "NDAs & Compliance", parentId: "1", materializedPath: "/1/1-2/", depth: 1 },
-  { id: "2", name: "Finance & Accounts", parentId: null, materializedPath: "/2/", depth: 0 },
-  { id: "2-1", name: "Audits 2026", parentId: "2", materializedPath: "/2/2-1/", depth: 1 },
-  { id: "2-2", name: "Invoices & Receipts", parentId: "2", materializedPath: "/2/2-2/", depth: 1 },
-  { id: "3", name: "Human Resources", parentId: null, materializedPath: "/3/", depth: 0 },
-  { id: "3-1", name: "Personnel Files", parentId: "3", materializedPath: "/3/3-1/", depth: 1 },
+  { id: "11111111-1111-1111-1111-111111111111", name: "Corporate & Legal", parentId: null, materializedPath: "/", depth: 0 },
+  { id: "11111111-1111-1111-1111-111111111112", name: "Contracts & Agreements", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
+  { id: "11111111-1111-1111-1111-111111111113", name: "NDAs & Compliance", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
+  { id: "22222222-2222-2222-2222-222222222221", name: "Finance & Accounts", parentId: null, materializedPath: "/", depth: 0 },
+  { id: "22222222-2222-2222-2222-222222222222", name: "Audits 2026", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
+  { id: "22222222-2222-2222-2222-222222222223", name: "Invoices & Receipts", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
+  { id: "33333333-3333-3333-3333-333333333331", name: "Human Resources", parentId: null, materializedPath: "/", depth: 0 },
+  { id: "33333333-3333-3333-3333-333333333332", name: "Personnel Files", parentId: "33333333-3333-3333-3333-333333333331", materializedPath: "/33333333-3333-3333-3333-333333333331/", depth: 1 },
+  { id: "6a893dc0-2afe-4861-b355-0531a6e90836", name: "Corporate Contracts", parentId: null, materializedPath: "/", depth: 0 },
 ];
 
 const initialDocuments: DocumentItem[] = [
@@ -101,24 +140,111 @@ export const useDocumentStore = create<DocumentStoreState>()(
       documents: initialDocuments,
       selectedFolderId: null,
       activeStorageProvider: "LOCAL",
-      activeOcrEngine: "AWS_TEXTRACT",
+      activeOcrEngine: "LOCAL_TESSERACT",
+      isLoading: false,
+      activePipeline: null,
+
+      fetchFolders: async () => {
+        try {
+          const res = await fetch("/api/folders/all");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              const mapped: FolderNode[] = data.map((f: any) => ({
+                id: f.id,
+                name: f.name,
+                parentId: f.parentId,
+                materializedPath: f.materializedPath,
+                depth: f.depth,
+              }));
+              set((state) => {
+                const isValidCurrent = mapped.some((f) => f.id === state.selectedFolderId);
+                return {
+                  folders: mapped,
+                  selectedFolderId: isValidCurrent ? state.selectedFolderId : mapped[0]?.id || null,
+                };
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("Could not fetch remote folders:", err);
+        }
+      },
+
+      fetchDocuments: async () => {
+        try {
+          set({ isLoading: true });
+          const res = await fetch("/api/documents");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              set({
+                documents: data.map((d: any) => ({
+                  id: d.id,
+                  folderId: d.folderId,
+                  name: d.name,
+                  mimeType: d.mimeType,
+                  extension: d.extension,
+                  fileSizeBytes: d.fileSizeBytes,
+                  currentVersion: d.currentVersion || 1,
+                  status: d.status === "READY" ? "INDEXED" : d.status,
+                  storageProvider: d.storageProvider || "LOCAL",
+                  pageCount: d.pageCount,
+                  createdAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "Just now",
+                  checksum: d.checksumSha256,
+                  fileUrl: `/api/documents/${d.id}/preview`,
+                })),
+                isLoading: false,
+              });
+              return;
+            }
+          }
+          set({ isLoading: false });
+        } catch (err) {
+          console.warn("Could not fetch remote documents:", err);
+          set({ isLoading: false });
+        }
+      },
 
       selectFolder: (folderId: string | null) => {
         set({ selectedFolderId: folderId });
       },
 
-      createFolder: (name: string, parentId: string | null) => {
-        const id = `fld-${Date.now()}`;
-        let depth = 0;
-        let materializedPath = `/${id}/`;
-
-        if (parentId) {
-          const parent = get().folders.find((f) => f.id === parentId);
-          if (parent) {
-            depth = parent.depth + 1;
-            materializedPath = `${parent.materializedPath}${id}/`;
+      createFolder: async (name: string, parentId: string | null) => {
+        try {
+          const isUUID = (str?: string | null) =>
+            !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+          const sanitizedParentId = isUUID(parentId) ? parentId : null;
+          const res = await fetch("/api/folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, parentId: sanitizedParentId }),
+          });
+          if (res.ok) {
+            const created = await res.json();
+            const newFolder: FolderNode = {
+              id: created.id,
+              name: created.name,
+              parentId: created.parentId,
+              materializedPath: created.materializedPath,
+              depth: created.depth,
+            };
+            set((state) => ({
+              folders: [...state.folders, newFolder],
+              selectedFolderId: created.id,
+            }));
+            return newFolder;
           }
+        } catch (err) {
+          console.warn("Backend create folder failed, falling back to local:", err);
         }
+
+        const id = `f-${Date.now()}`;
+        const parent = get().folders.find((f) => f.id === parentId);
+        const depth = parent ? parent.depth + 1 : 0;
+        const materializedPath = parent
+          ? `${parent.materializedPath}${id}/`
+          : `/${id}/`;
 
         const newFolder: FolderNode = {
           id,
@@ -136,7 +262,12 @@ export const useDocumentStore = create<DocumentStoreState>()(
         return newFolder;
       },
 
-      deleteFolder: (folderId: string) => {
+      deleteFolder: async (folderId: string) => {
+        try {
+          await fetch(`/api/folders/${folderId}`, { method: "DELETE" });
+        } catch (err) {
+          console.warn("Backend delete folder error:", err);
+        }
         const target = get().folders.find((f) => f.id === folderId);
         if (!target) return;
 
@@ -149,11 +280,118 @@ export const useDocumentStore = create<DocumentStoreState>()(
         }));
       },
 
+      uploadRealDocument: async (
+        file: File,
+        folderId: string | null,
+        onProgress?: (status: PipelineStatus) => void
+      ) => {
+        const isUUID = (str?: string | null) =>
+          !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+        // Find a valid UUID folder id
+        let targetFolderId = isUUID(folderId) ? folderId! : "";
+        if (!targetFolderId) {
+          const validFolder = get().folders.find((f) => isUUID(f.id));
+          targetFolderId = validFolder ? validFolder.id : "6a893dc0-2afe-4861-b355-0531a6e90836";
+        }
+
+        const currentUser = useAuthStore.getState().user;
+        const currentUsername = currentUser?.username || "manoj";
+        const currentRole = currentUser?.role || "CONTRIBUTOR";
+        const token = useAuthStore.getState().token;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("folderId", targetFolderId);
+        formData.append("actor", currentUsername);
+        formData.append("role", currentRole);
+
+        const headers: Record<string, string> = {
+          "X-Actor-Username": currentUsername,
+          "X-Actor-Role": currentRole,
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const uploadRes = await fetch(`/api/documents/upload?actor=${encodeURIComponent(currentUsername)}`, {
+          method: "POST",
+          headers: headers,
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          let msg = `Upload failed (HTTP ${uploadRes.status})`;
+          try {
+            const parsed = JSON.parse(errText);
+            msg = parsed.message || parsed.error || msg;
+          } catch {
+            if (errText && errText.length < 200) msg = errText;
+          }
+          throw new Error(msg);
+        }
+
+        const createdDoc = await uploadRes.json();
+        const docItem: DocumentItem = {
+          id: createdDoc.id,
+          folderId: createdDoc.folderId,
+          name: createdDoc.name,
+          mimeType: createdDoc.mimeType,
+          extension: createdDoc.extension,
+          fileSizeBytes: createdDoc.fileSizeBytes,
+          currentVersion: createdDoc.currentVersion || 1,
+          status: "PROCESSING",
+          storageProvider: createdDoc.storageProvider || "LOCAL",
+          pageCount: createdDoc.pageCount || 1,
+          createdAt: "Just now",
+          checksum: createdDoc.checksumSha256,
+          fileUrl: `/api/documents/${createdDoc.id}/preview`,
+        };
+
+        set((state) => ({
+          documents: [docItem, ...state.documents.filter((d) => d.id !== docItem.id)],
+        }));
+
+        // Poll pipeline status until completed
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await fetch(`/api/documents/${createdDoc.id}/status`);
+            if (statusRes.ok) {
+              const pipeline: PipelineStatus = await statusRes.json();
+              set({ activePipeline: pipeline });
+              if (onProgress) {
+                onProgress(pipeline);
+              }
+
+              if (pipeline.status === "COMPLETED" || pipeline.status === "READY") {
+                clearInterval(pollInterval);
+                await get().fetchDocuments();
+              } else if (pipeline.status === "FAILED") {
+                clearInterval(pollInterval);
+                set((state) => ({
+                  documents: state.documents.map((d) =>
+                    d.id === createdDoc.id ? { ...d, status: "FAILED" } : d
+                  ),
+                }));
+              }
+            }
+          } catch (pollErr) {
+            console.warn("Status polling error:", pollErr);
+          }
+        }, 350);
+
+        return docItem;
+      },
+
       uploadDocument: (
         name: string,
         sizeBytes: number,
         mimeType: string,
-        folderId: string | null
+        folderId: string | null,
+        fileUrl?: string,
+        pageCount?: number,
+        checksum?: string
       ) => {
         const ext = name.split(".").pop()?.toLowerCase() || "pdf";
         const docId = `doc-${Date.now()}`;
@@ -167,27 +405,33 @@ export const useDocumentStore = create<DocumentStoreState>()(
           currentVersion: 1,
           status: "PROCESSING",
           storageProvider: get().activeStorageProvider,
-          pageCount: Math.floor(Math.random() * 8) + 1,
+          pageCount: pageCount || 1,
           createdAt: "Just now",
+          fileUrl,
+          checksum,
         };
 
         set((state) => ({
           documents: [newDoc, ...state.documents],
         }));
 
-        // Simulate asynchronous pipeline transition to INDEXED after 2.5 seconds
         setTimeout(() => {
           set((state) => ({
             documents: state.documents.map((d) =>
               d.id === docId ? { ...d, status: "INDEXED" } : d
             ),
           }));
-        }, 2500);
+        }, 1800);
 
         return newDoc;
       },
 
-      deleteDocument: (documentId: string) => {
+      deleteDocument: async (documentId: string) => {
+        try {
+          await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
+        } catch (err) {
+          console.warn("Backend delete doc error:", err);
+        }
         set((state) => ({
           documents: state.documents.filter((d) => d.id !== documentId),
         }));
@@ -222,12 +466,12 @@ export const useDocumentStore = create<DocumentStoreState>()(
               d.id === docId ? { ...d, status: "INDEXED" } : d
             ),
           }));
-        }, 2500);
+        }, 2000);
 
         return newDoc;
       },
 
-      setStorageProvider: (provider: "LOCAL" | "S3") => {
+      setStorageProvider: (provider: "LOCAL" | "NAS" | "S3") => {
         set({ activeStorageProvider: provider });
       },
 

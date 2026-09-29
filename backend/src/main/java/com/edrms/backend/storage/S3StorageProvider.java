@@ -20,9 +20,13 @@ import java.time.Duration;
 @Component
 public class S3StorageProvider implements StorageProvider {
 
-    private final String bucketName;
-    private final S3Client s3Client;
-    private final S3Presigner s3Presigner;
+    private volatile String bucketName;
+    private volatile String regionStr;
+    private volatile String accessKey;
+    private volatile String secretKey;
+    private volatile String endpoint;
+    private volatile S3Client s3Client;
+    private volatile S3Presigner s3Presigner;
 
     public S3StorageProvider(
         @Value("${edrms.storage.s3.bucket-name:edrms-documents-bucket}") String bucketName,
@@ -31,23 +35,37 @@ public class S3StorageProvider implements StorageProvider {
         @Value("${edrms.storage.s3.secret-key:}") String secretKey,
         @Value("${edrms.storage.s3.endpoint:}") String endpoint
     ) {
-        this.bucketName = bucketName;
-        Region region = Region.of(regionStr);
+        reconfigure(bucketName, regionStr, accessKey, secretKey, endpoint);
+    }
 
+    public synchronized void reconfigure(
+        String bucketName,
+        String regionStr,
+        String accessKey,
+        String secretKey,
+        String endpoint
+    ) {
+        this.bucketName = (bucketName != null && !bucketName.isBlank()) ? bucketName.trim() : "edrms-documents-bucket";
+        this.regionStr = (regionStr != null && !regionStr.isBlank()) ? regionStr.trim() : "us-east-1";
+        this.accessKey = accessKey != null ? accessKey.trim() : "";
+        this.secretKey = secretKey != null ? secretKey.trim() : "";
+        this.endpoint = endpoint != null ? endpoint.trim() : "";
+
+        Region region = Region.of(this.regionStr);
         S3ClientBuilder clientBuilder = S3Client.builder().region(region);
         software.amazon.awssdk.services.s3.presigner.S3Presigner.Builder presignerBuilder =
             S3Presigner.builder().region(region);
 
-        if (accessKey != null && !accessKey.isBlank() && secretKey != null && !secretKey.isBlank()) {
+        if (!this.accessKey.isBlank() && !this.secretKey.isBlank()) {
             StaticCredentialsProvider creds = StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(accessKey, secretKey)
+                AwsBasicCredentials.create(this.accessKey, this.secretKey)
             );
             clientBuilder.credentialsProvider(creds);
             presignerBuilder.credentialsProvider(creds);
         }
 
-        if (endpoint != null && !endpoint.isBlank()) {
-            URI endpointUri = URI.create(endpoint);
+        if (!this.endpoint.isBlank()) {
+            URI endpointUri = URI.create(this.endpoint);
             clientBuilder.endpointOverride(endpointUri).forcePathStyle(true);
             presignerBuilder.endpointOverride(endpointUri);
         }
@@ -58,11 +76,18 @@ public class S3StorageProvider implements StorageProvider {
             builtClient = clientBuilder.build();
             builtPresigner = presignerBuilder.build();
         } catch (Exception ignored) {
-            // Permits graceful startup in dev environments where AWS keys are not yet configured
+            // Permits graceful startup when credentials are incomplete
         }
         this.s3Client = builtClient;
         this.s3Presigner = builtPresigner;
     }
+
+    public String getBucketName() { return this.bucketName; }
+    public String getRegionStr() { return this.regionStr; }
+    public String getAccessKey() { return this.accessKey; }
+    public String getEndpoint() { return this.endpoint; }
+    public boolean hasSecretKey() { return this.secretKey != null && !this.secretKey.isBlank(); }
+    public S3Client getS3Client() { return this.s3Client; }
 
     @Override
     public StorageResult store(String key, InputStream inputStream, StorageMetadata metadata) {

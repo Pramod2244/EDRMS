@@ -26,18 +26,21 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-xl w-full max-w-md p-6 space-y-5 shadow-2xl animate-in fade-in-50 zoom-in-95">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 space-y-5 shadow-xl animate-in fade-in-50 zoom-in-95">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-lg bg-primary/20 text-primary">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
               <FolderPlus className="h-5 w-5" />
             </div>
-            <h3 className="font-bold text-lg">Create New Folder</h3>
+            <div>
+              <h3 className="font-bold text-base text-slate-900">Create New Folder</h3>
+              <p className="text-[11px] text-slate-400">Arkaa digital &bull; Repository Directory</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition"
+            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -45,7 +48,7 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Folder Name
             </label>
             <input
@@ -53,20 +56,20 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. FY2026 Tax Filings"
+              placeholder="e.g. FY2026 Audit Reports"
               required
-              className="w-full mt-1.5 px-3.5 py-2.5 rounded-lg border border-border bg-secondary/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Parent Folder Location
             </label>
             <select
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
-              className="w-full mt-1.5 px-3.5 py-2.5 rounded-lg border border-border bg-secondary/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
             >
               <option value="">Repository Root (/) </option>
               {folders.map((f) => (
@@ -81,13 +84,13 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-secondary transition"
+              className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition"
+              className="px-5 py-2 rounded-lg bg-orange-500 text-white font-semibold text-sm hover:bg-orange-600 transition shadow-xs"
             >
               Create Folder
             </button>

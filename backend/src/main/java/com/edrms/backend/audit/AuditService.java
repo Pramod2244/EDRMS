@@ -31,6 +31,14 @@ public class AuditService {
         String status,
         String detailsJson
     ) {
+        String validJson = detailsJson;
+        if (validJson != null && !validJson.isBlank()) {
+            String trimmed = validJson.trim();
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                validJson = "{\"message\":\"" + trimmed.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"}";
+            }
+        }
+
         AuditLog log = AuditLog.builder()
             .traceId(traceId != null ? traceId : UUID.randomUUID().toString())
             .actorUserId(actorUserId)
@@ -41,7 +49,7 @@ public class AuditService {
             .entityType(entityType)
             .entityId(entityId)
             .status(status)
-            .detailsJson(detailsJson)
+            .detailsJson(validJson)
             .build();
 
         auditLogRepository.save(log);

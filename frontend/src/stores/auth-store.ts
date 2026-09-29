@@ -11,17 +11,33 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   permissions: PermissionType[];
+  assignedFolderIds?: string[];
+  accessibleMenus?: string[];
+  token?: string;
+  sessionExpiresAt?: string | null;
+  isTemporaryAccess?: boolean;
 }
 
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  token: string | null;
+  sessionExpiresAt: string | null;
+  isTemporaryAccess: boolean;
   login: (username: string, role?: UserRole) => void;
+  setAuthenticatedUser: (
+    user: AuthUser,
+    token: string,
+    expiresAt?: string | null,
+    isTemporary?: boolean
+  ) => void;
+  setSessionDuration: (durationMinutes: number) => void;
+  extendSession: (additionalMinutes: number) => void;
   logout: () => void;
   switchRole: (role: UserRole) => void;
 }
 
-const rolePermissionsMap: Record<UserRole, PermissionType[]> = {
+export const rolePermissionsMap: Record<UserRole, PermissionType[]> = {
   SUPER_ADMIN: [
     "VIEW",
     "UPLOAD",
@@ -46,19 +62,28 @@ const rolePermissionsMap: Record<UserRole, PermissionType[]> = {
   AUDITOR: ["VIEW", "AUDIT_READ"],
 };
 
+export const DEFAULT_ADMIN_USER: AuthUser = {
+  id: "usr-admin-01",
+  username: "admin",
+  fullName: "Alexander Davis",
+  email: "admin@arkaa-digital.local",
+  role: "SUPER_ADMIN",
+  permissions: rolePermissionsMap["SUPER_ADMIN"],
+  accessibleMenus: ["/documents", "/search", "/audit", "/admin"],
+  sessionExpiresAt: null,
+  isTemporaryAccess: false,
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: {
-        id: "usr-admin-01",
-        username: "admin",
-        fullName: "Alexander Davis",
-        email: "a.davis@edrms.corp",
-        role: "SUPER_ADMIN",
-        permissions: rolePermissionsMap["SUPER_ADMIN"],
-      },
+      user: DEFAULT_ADMIN_USER,
       isAuthenticated: true,
+      token: null,
+      sessionExpiresAt: null,
+      isTemporaryAccess: false,
 
+      // Compatibility login
       login: (username: string, role: UserRole = "SUPER_ADMIN") => {
         const fullName =
           username === "admin"
@@ -67,18 +92,68 @@ export const useAuthStore = create<AuthState>()(
             ? "John Doe"
             : username.charAt(0).toUpperCase() + username.slice(1);
 
-        const email = `${username.toLowerCase()}@edrms.corp`;
+        const email = `${username.toLowerCase()}@arkaa-digital.local`;
 
         set({
           isAuthenticated: true,
+          token: null,
+          sessionExpiresAt: null,
+          isTemporaryAccess: false,
           user: {
             id: `usr-${username.toLowerCase()}`,
             username,
             fullName,
             email,
             role,
-            permissions: rolePermissionsMap[role],
+            permissions: rolePermissionsMap[role] || ["VIEW"],
+            sessionExpiresAt: null,
+            isTemporaryAccess: false,
           },
+        });
+      },
+
+      setAuthenticatedUser: (
+        user: AuthUser,
+        token: string,
+        expiresAt?: string | null,
+        isTemporary: boolean = false
+      ) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("edrms_access_token", token);
+        }
+        // ONLY temporary access users get an active expiring countdown; permanent users have no expiration
+        const effectiveExpiry = isTemporary ? (expiresAt || null) : null;
+        set({
+          isAuthenticated: true,
+          token,
+          sessionExpiresAt: effectiveExpiry,
+          isTemporaryAccess: isTemporary,
+          user: {
+            ...user,
+            token,
+            sessionExpiresAt: effectiveExpiry,
+            isTemporaryAccess: isTemporary,
+          },
+        });
+      },
+
+      setSessionDuration: (durationMinutes: number) => {
+        const newExpiry = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
+        set((state) => ({
+          sessionExpiresAt: newExpiry,
+          user: state.user ? { ...state.user, sessionExpiresAt: newExpiry } : null,
+        }));
+      },
+
+      extendSession: (additionalMinutes: number) => {
+        set((state) => {
+          const currentMs = state.sessionExpiresAt ? new Date(state.sessionExpiresAt).getTime() : Date.now();
+          const baseTime = Math.max(Date.now(), currentMs);
+          const newExpiry = new Date(baseTime + additionalMinutes * 60 * 1000).toISOString();
+          return {
+            sessionExpiresAt: newExpiry,
+            user: state.user ? { ...state.user, sessionExpiresAt: newExpiry } : null,
+          };
         });
       },
 
@@ -89,17 +164,20 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           isAuthenticated: false,
+          token: null,
+          sessionExpiresAt: null,
+          isTemporaryAccess: false,
         });
       },
 
       switchRole: (newRole: UserRole) => {
         set((state) => {
-          if (!state.user) return state;
+          const targetUser = state.user || DEFAULT_ADMIN_USER;
           return {
             user: {
-              ...state.user,
+              ...targetUser,
               role: newRole,
-              permissions: rolePermissionsMap[newRole],
+              permissions: rolePermissionsMap[newRole] || ["VIEW"],
             },
           };
         });

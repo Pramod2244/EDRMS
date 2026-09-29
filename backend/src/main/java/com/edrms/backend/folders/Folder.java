@@ -21,6 +21,10 @@ public class Folder {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "tenant_id", nullable = false)
+    @Builder.Default
+    private UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @Column(nullable = false, length = 255)
     private String name;
 

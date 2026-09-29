@@ -20,6 +20,10 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--orange-hover))",
+          active: "hsl(var(--orange-active))",
+          soft: "hsl(var(--orange-soft))",
+          border: "hsl(var(--orange-border))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",

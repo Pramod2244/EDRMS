@@ -14,19 +14,23 @@ public class OcrService {
 
     public OcrService(
         List<OcrEngine> engines,
-        @Value("${edrms.ocr.active-engine:AWS_TEXTRACT}") String preferredEngine
+        @Value("${edrms.ocr.active-engine:LOCAL_TESSERACT}") String preferredEngine
     ) {
         this.engines = engines;
         this.preferredEngine = preferredEngine;
     }
 
     public OcrResult extractText(InputStream documentStream) {
+        // First match preferred engine
         for (OcrEngine engine : engines) {
-            if (engine.getEngineType().name().equalsIgnoreCase(preferredEngine) && engine.isAvailable()) {
+            String engineName = engine.getEngineType().name();
+            if ((engineName.equalsIgnoreCase(preferredEngine) || 
+                (preferredEngine.contains("TESSERACT") && engineName.contains("TESSERACT"))) 
+                && engine.isAvailable()) {
                 return engine.process(documentStream);
             }
         }
-        // Fallback to first available engine
+        // Fallback to any available engine
         for (OcrEngine engine : engines) {
             if (engine.isAvailable()) {
                 return engine.process(documentStream);
