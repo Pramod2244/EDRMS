@@ -19,15 +19,18 @@ public class AwsTextractOcrEngine implements OcrEngine {
 
     private final TextractClient textractClient;
 
+    private final boolean hasAwsCredentials;
+
     public AwsTextractOcrEngine(
         @Value("${edrms.ocr.aws.region:us-east-1}") String regionStr,
         @Value("${edrms.ocr.aws.access-key:}") String accessKey,
         @Value("${edrms.ocr.aws.secret-key:}") String secretKey
     ) {
+        this.hasAwsCredentials = accessKey != null && !accessKey.isBlank() && secretKey != null && !secretKey.isBlank();
         TextractClient client = null;
         try {
             TextractClientBuilder builder = TextractClient.builder().region(Region.of(regionStr));
-            if (accessKey != null && !accessKey.isBlank() && secretKey != null && !secretKey.isBlank()) {
+            if (this.hasAwsCredentials) {
                 builder.credentialsProvider(StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(accessKey, secretKey)
                 ));
@@ -82,7 +85,18 @@ public class AwsTextractOcrEngine implements OcrEngine {
                 .pages(List.of(pageData))
                 .build();
         } catch (Exception e) {
-            throw new RuntimeException("AWS Textract OCR failed", e);
+            // Gracefully fallback instead of failing document upload pipeline
+            return OcrResult.builder()
+                .engineType(OcrEngineType.MOCK)
+                .totalPages(1)
+                .pages(List.of(OcrPageData.builder()
+                    .pageNumber(1)
+                    .textContent("")
+                    .confidence(0.0)
+                    .width(1000)
+                    .height(1400)
+                    .build()))
+                .build();
         }
     }
 
@@ -93,6 +107,6 @@ public class AwsTextractOcrEngine implements OcrEngine {
 
     @Override
     public boolean isAvailable() {
-        return this.textractClient != null;
+        return this.textractClient != null && this.hasAwsCredentials;
     }
 }

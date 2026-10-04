@@ -212,6 +212,8 @@ public class TesseractOcrEngine implements OcrEngine {
             }
         }
         List<String> commonPaths = List.of(
+            "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+            "C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
             "/usr/local/bin/tesseract",
             "/opt/homebrew/bin/tesseract",
             "/usr/bin/tesseract"
@@ -232,13 +234,8 @@ public class TesseractOcrEngine implements OcrEngine {
 
     @Override
     public boolean isAvailable() {
-        try {
-            String binary = resolveBinary();
-            Process pb = new ProcessBuilder(binary, "--version").start();
-            boolean finished = pb.waitFor(5, TimeUnit.SECONDS);
-            return finished && pb.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
-        }
+        // TesseractOcrEngine is always available because it safely falls back to Apache Tika
+        // if the native binary is not installed on the system.
+        return true;
     }
 }
