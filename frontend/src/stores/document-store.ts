@@ -67,72 +67,9 @@ interface DocumentStoreState {
   setOcrEngine: (engine: string) => void;
 }
 
-const initialFolders: FolderNode[] = [
-  { id: "11111111-1111-1111-1111-111111111111", name: "Corporate & Legal", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "11111111-1111-1111-1111-111111111112", name: "Contracts & Agreements", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
-  { id: "11111111-1111-1111-1111-111111111113", name: "NDAs & Compliance", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
-  { id: "22222222-2222-2222-2222-222222222221", name: "Finance & Accounts", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "22222222-2222-2222-2222-222222222222", name: "Audits 2026", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
-  { id: "22222222-2222-2222-2222-222222222223", name: "Invoices & Receipts", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
-  { id: "33333333-3333-3333-3333-333333333331", name: "Human Resources", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "33333333-3333-3333-3333-333333333332", name: "Personnel Files", parentId: "33333333-3333-3333-3333-333333333331", materializedPath: "/33333333-3333-3333-3333-333333333331/", depth: 1 },
-  { id: "6a893dc0-2afe-4861-b355-0531a6e90836", name: "Corporate Contracts", parentId: null, materializedPath: "/", depth: 0 },
-];
+const initialFolders: FolderNode[] = [];
 
-const initialDocuments: DocumentItem[] = [
-  {
-    id: "doc-1",
-    folderId: "1-1",
-    name: "Q3_Vendor_Master_Contract.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 3450200,
-    currentVersion: 2,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 18,
-    createdAt: "2026-09-03 10:30",
-  },
-  {
-    id: "doc-2",
-    folderId: "2-1",
-    name: "Audited_Balance_Sheet_2026.xlsx",
-    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    extension: "xlsx",
-    fileSizeBytes: 1240900,
-    currentVersion: 1,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 4,
-    createdAt: "2026-09-03 11:15",
-  },
-  {
-    id: "doc-3",
-    folderId: "2-2",
-    name: "Scanned_Receipt_Receipts_ADF.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 5490200,
-    currentVersion: 1,
-    status: "PROCESSING",
-    storageProvider: "LOCAL",
-    pageCount: 8,
-    createdAt: "2026-09-03 11:45",
-  },
-  {
-    id: "doc-4",
-    folderId: null, // Root
-    name: "Enterprise_DMS_Architecture_Spec.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 2180400,
-    currentVersion: 1,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 12,
-    createdAt: "2026-09-03 12:00",
-  },
-];
+const initialDocuments: DocumentItem[] = [];
 
 export const useDocumentStore = create<DocumentStoreState>()(
   persist(
@@ -147,10 +84,14 @@ export const useDocumentStore = create<DocumentStoreState>()(
 
       fetchFolders: async () => {
         try {
-          const res = await fetch("/api/folders/all");
+          const token = typeof window !== "undefined" ? (localStorage.getItem("edrms_access_token") || useAuthStore.getState().token) : null;
+          const headers: Record<string, string> = {};
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+
+          const res = await fetch("/api/folders/all", { headers });
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
               const mapped: FolderNode[] = data.map((f: any) => ({
                 id: f.id,
                 name: f.name,
@@ -159,10 +100,12 @@ export const useDocumentStore = create<DocumentStoreState>()(
                 depth: f.depth,
               }));
               set((state) => {
-                const isValidCurrent = mapped.some((f) => f.id === state.selectedFolderId);
+                const isValidCurrent =
+                  state.selectedFolderId === null ||
+                  mapped.some((f) => f.id === state.selectedFolderId);
                 return {
                   folders: mapped,
-                  selectedFolderId: isValidCurrent ? state.selectedFolderId : mapped[0]?.id || null,
+                  selectedFolderId: isValidCurrent ? state.selectedFolderId : null,
                 };
               });
             }
@@ -175,26 +118,32 @@ export const useDocumentStore = create<DocumentStoreState>()(
       fetchDocuments: async () => {
         try {
           set({ isLoading: true });
-          const res = await fetch("/api/documents");
+          const token = typeof window !== "undefined" ? (localStorage.getItem("edrms_access_token") || useAuthStore.getState().token) : null;
+          const headers: Record<string, string> = {};
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+
+          const res = await fetch("/api/documents", { headers });
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
+              const liveDocs: DocumentItem[] = data.map((d: any) => ({
+                id: d.id,
+                folderId: d.folderId,
+                name: d.name,
+                mimeType: d.mimeType,
+                extension: d.extension,
+                fileSizeBytes: d.fileSizeBytes,
+                currentVersion: d.currentVersion || 1,
+                status: d.status === "READY" ? "INDEXED" : d.status,
+                storageProvider: d.storageProvider || "LOCAL",
+                storageKey: d.storageKey || "",
+                pageCount: d.pageCount,
+                createdAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "Just now",
+                checksum: d.checksumSha256,
+                fileUrl: `/api/documents/${d.id}/preview`,
+              }));
               set({
-                documents: data.map((d: any) => ({
-                  id: d.id,
-                  folderId: d.folderId,
-                  name: d.name,
-                  mimeType: d.mimeType,
-                  extension: d.extension,
-                  fileSizeBytes: d.fileSizeBytes,
-                  currentVersion: d.currentVersion || 1,
-                  status: d.status === "READY" ? "INDEXED" : d.status,
-                  storageProvider: d.storageProvider || "LOCAL",
-                  pageCount: d.pageCount,
-                  createdAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "Just now",
-                  checksum: d.checksumSha256,
-                  fileUrl: `/api/documents/${d.id}/preview`,
-                })),
+                documents: liveDocs,
                 isLoading: false,
               });
               return;
@@ -344,6 +293,7 @@ export const useDocumentStore = create<DocumentStoreState>()(
           currentVersion: createdDoc.currentVersion || 1,
           status: "PROCESSING",
           storageProvider: createdDoc.storageProvider || "LOCAL",
+          storageKey: createdDoc.storageKey || "",
           pageCount: createdDoc.pageCount || 1,
           createdAt: "Just now",
           checksum: createdDoc.checksumSha256,
@@ -506,6 +456,13 @@ export const useDocumentStore = create<DocumentStoreState>()(
     }),
     {
       name: "edrms-document-storage",
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.documents = (state.documents || []).filter(
+            (d) => d.id && !d.id.startsWith("doc-") && !d.id.startsWith("scan-")
+          );
+        }
+      },
     }
   )
 );

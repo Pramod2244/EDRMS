@@ -30,6 +30,7 @@ export interface DocumentItem {
   currentVersion: number;
   status: "PENDING" | "PROCESSING" | "INDEXED" | "FAILED";
   storageProvider: "LOCAL" | "NAS" | "S3" | string;
+  storageKey?: string;
   pageCount: number | null;
   createdAt: string;
   fileUrl?: string;

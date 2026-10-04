@@ -170,21 +170,26 @@ export default function DocumentTable({
     return crumbs;
   }, [folderId, folders, assignedIds]);
 
-  // Documents in scope: either direct folder only or recursive including subfolders
+  // Documents in scope: strictly real files coming from database repository path
   const folderDocuments = useMemo(() => {
+    // Only real database-persisted documents from backend repository path
+    const validDocs = documents.filter(
+      (d) => d.id && !d.id.startsWith("doc-") && !d.id.startsWith("scan-")
+    );
+
     if (!folderId) {
       if (assignedIds) {
-        return documents.filter((doc) => doc.folderId && assignedIds.has(doc.folderId));
+        return validDocs.filter((doc) => doc.folderId && assignedIds.has(doc.folderId));
       }
-      return documents;
+      return validDocs;
     }
 
     if (includeSubfolders) {
       const descendantIds = getDescendantFolderIds(folderId);
-      return documents.filter((doc) => doc.folderId && descendantIds.has(doc.folderId));
+      return validDocs.filter((doc) => doc.folderId && descendantIds.has(doc.folderId));
     }
 
-    return documents.filter((doc) => doc.folderId === folderId);
+    return validDocs.filter((doc) => doc.folderId === folderId);
   }, [documents, folderId, includeSubfolders, assignedIds, folders]);
 
   const displayDocuments = folderDocuments.filter((doc) => {
@@ -560,10 +565,18 @@ export default function DocumentTable({
                               </button>
                             )}
                           </div>
-                          <span className="text-xs text-slate-500">
-                            {doc.pageCount ? `${doc.pageCount} pages` : "Processing pages..."}
-                            {doc.createdAt && ` &bull; ${doc.createdAt}`}
+                          <span className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            <span>{doc.pageCount ? `${doc.pageCount} pages` : "Processing pages..."}</span>
+                            {doc.createdAt && <span>&bull; {doc.createdAt}</span>}
                           </span>
+                          {doc.storageKey && (
+                            <span
+                              className="text-[11px] font-mono text-slate-400 block truncate max-w-sm mt-0.5"
+                              title={`Repository Path: ${doc.storageKey}`}
+                            >
+                              <span className="text-slate-500 font-medium">Path:</span> {doc.storageKey}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -585,9 +598,19 @@ export default function DocumentTable({
                       </span>
                     </td>
                     <td className="px-6 py-3.5">
-                      <span className="text-xs font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-600">
-                        {doc.storageProvider}
-                      </span>
+                      <div className="flex flex-col space-y-0.5">
+                        <span className="text-xs font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-600 inline-block w-fit">
+                          {doc.storageProvider}
+                        </span>
+                        {doc.storageKey && (
+                          <span
+                            className="text-[10px] font-mono text-slate-400 max-w-[160px] truncate"
+                            title={doc.storageKey}
+                          >
+                            {doc.storageKey.split("/").slice(-1)[0]}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-3.5 text-right">
                       <div className="flex items-center justify-end space-x-1.5">

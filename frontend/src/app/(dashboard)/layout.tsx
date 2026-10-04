@@ -32,7 +32,47 @@ export default function DashboardLayout({
   const { user, sessionExpiresAt, logout, switchRole, setSessionDuration, extendSession } = useAuthStore();
 
   // Active user: always guarantees the profile & logout menu is present inside the system
-  const activeUser = user || DEFAULT_ADMIN_USER;
+  const rawUser = user || DEFAULT_ADMIN_USER;
+  const activeUser = {
+    ...rawUser,
+    fullName: rawUser.fullName === "Alexander Davis" ? "Administrator" : (rawUser.fullName || rawUser.username),
+  };
+
+  // Sync live profile from database (/api/auth/me) so real database name (Administrator) is always displayed
+  useEffect(() => {
+    async function syncProfile() {
+      try {
+        const token = localStorage.getItem("edrms_access_token") || user?.token;
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch("/api/auth/me", { headers });
+        if (res.ok) {
+          const profile = await res.json();
+          if (profile && profile.username) {
+            useAuthStore.setState((state) => {
+              if (!state.user) return state;
+              return {
+                user: {
+                  ...state.user,
+                  fullName: profile.fullName || state.user.fullName,
+                  email: profile.email || state.user.email,
+                  role: profile.role || state.user.role,
+                  permissions: profile.permissions || state.user.permissions,
+                  assignedFolderIds: profile.assignedFolderIds || state.user.assignedFolderIds,
+                  accessibleMenus: profile.accessibleMenus || state.user.accessibleMenus,
+                },
+              };
+            });
+          }
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    }
+    syncProfile();
+  }, []);
 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dismissedTier, setDismissedTier] = useState<string | null>(null);

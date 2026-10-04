@@ -2,6 +2,7 @@ package com.edrms.backend.auth;
 
 import com.edrms.backend.audit.AuditAction;
 import com.edrms.backend.audit.AuditService;
+import com.edrms.backend.users.User;
 import com.edrms.backend.users.UserRepository;
 import com.nimbusds.jwt.JWTClaimsSet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,13 +10,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -28,78 +30,6 @@ public class AuthController {
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:http://localhost:8080/realms/edrms}")
     private String keycloakIssuerUri;
-
-    // Store for dynamically created and granted users
-    private static final Map<String, GrantedUserRecord> GRANTED_USERS = new ConcurrentHashMap<>();
-    // Store for deleted preset user accounts
-    private static final java.util.Set<String> DELETED_PRESET_USERS = ConcurrentHashMap.newKeySet();
-
-    public record GrantedUserRecord(
-        String username,
-        String password,
-        String fullName,
-        String email,
-        String role,
-        List<String> permissions,
-        List<String> assignedFolderIds,
-        List<String> accessibleMenus,
-        boolean isTemporary,
-        Long durationSeconds,
-        OffsetDateTime expiresAt,
-        OffsetDateTime createdAt
-    ) {}
-
-    private static final Map<String, UserCredentials> PRESET_USERS = new LinkedHashMap<>();
-
-    static {
-        PRESET_USERS.put("admin", new UserCredentials(
-            "usr-admin-01", "admin", "Admin123!", "Alexander Davis", "admin@arkaa-digital.local",
-            "SUPER_ADMIN",
-            List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS", "AUDIT_READ"),
-            Collections.emptyList(),
-            List.of("/documents", "/search", "/audit", "/admin")
-        ));
-        PRESET_USERS.put("manager", new UserCredentials(
-            "usr-mgr-02", "manager", "Manager123!", "Sarah Jenkins", "manager@arkaa-digital.local",
-            "DEPARTMENT_MANAGER",
-            List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS"),
-            Collections.emptyList(),
-            List.of("/documents", "/search", "/audit")
-        ));
-        PRESET_USERS.put("contributor", new UserCredentials(
-            "usr-contrib-03", "contributor", "Contributor123!", "David Miller", "contributor@arkaa-digital.local",
-            "CONTRIBUTOR",
-            List.of("VIEW", "UPLOAD", "DOWNLOAD", "PRINT"),
-            Collections.emptyList(),
-            List.of("/documents", "/search")
-        ));
-        PRESET_USERS.put("auditor", new UserCredentials(
-            "usr-audit-04", "auditor", "Auditor123!", "Elena Rostova", "auditor@arkaa-digital.local",
-            "AUDITOR",
-            List.of("VIEW", "AUDIT_READ"),
-            Collections.emptyList(),
-            List.of("/documents", "/search", "/audit")
-        ));
-        PRESET_USERS.put("viewer", new UserCredentials(
-            "usr-view-05", "viewer", "Viewer123!", "Guest Viewer", "viewer@arkaa-digital.local",
-            "VIEWER",
-            List.of("VIEW"),
-            Collections.emptyList(),
-            List.of("/documents", "/search")
-        ));
-    }
-
-    private record UserCredentials(
-        String id,
-        String username,
-        String password,
-        String fullName,
-        String email,
-        String role,
-        List<String> permissions,
-        List<String> assignedFolderIds,
-        List<String> accessibleMenus
-    ) {}
 
     public AuthController(
         JwtTokenService jwtTokenService,
@@ -128,7 +58,36 @@ public class AuthController {
         return remote;
     }
 
+    private List<String> defaultPermissionsForRole(String role) {
+        if (role == null) return List.of("VIEW");
+        return switch (role.toUpperCase()) {
+            case "SUPER_ADMIN" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS", "AUDIT_READ");
+            case "DEPARTMENT_MANAGER" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS");
+            case "CONTRIBUTOR" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "PRINT");
+            case "AUDITOR" -> List.of("VIEW", "AUDIT_READ");
+            default -> List.of("VIEW");
+        };
+    }
+
+    private List<String> defaultMenusForRole(String role) {
+        if (role == null) return List.of("/documents", "/search");
+        return switch (role.toUpperCase()) {
+            case "SUPER_ADMIN" -> List.of("/documents", "/search", "/audit", "/admin");
+            case "DEPARTMENT_MANAGER", "AUDITOR" -> List.of("/documents", "/search", "/audit");
+            default -> List.of("/documents", "/search");
+        };
+    }
+
+    private List<String> parseCsvList(String val, List<String> fallback) {
+        if (val == null || val.isBlank()) return fallback;
+        return Arrays.stream(val.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
+    }
+
     @PostMapping("/login")
+    @Transactional
     public ResponseEntity<?> login(@RequestBody AuthLoginRequest req, HttpServletRequest httpRequest) {
         if (req.getUsername() == null || req.getPassword() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -138,130 +97,8 @@ public class AuthController {
         String username = req.getUsername().trim();
         String password = req.getPassword();
 
-        // 1. Check dynamically granted/created users first
-        GrantedUserRecord granted = GRANTED_USERS.get(username.toLowerCase());
-        if (granted != null) {
-            if (!granted.password().equals(password)) {
-                auditService.recordAction(
-                    UUID.randomUUID().toString(),
-                    null,
-                    username,
-                    resolveIp(httpRequest),
-                    httpRequest.getHeader("User-Agent"),
-                    AuditAction.ACCESS_DENIED,
-                    "USER",
-                    username,
-                    "FAILED",
-                    "{\"reason\":\"Invalid password attempt\"}"
-                );
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Invalid username or password"));
-            }
-
-            // Check if temporary access has expired
-            if (granted.isTemporary() && granted.expiresAt() != null && OffsetDateTime.now().isAfter(granted.expiresAt())) {
-                auditService.recordAction(
-                    UUID.randomUUID().toString(),
-                    null,
-                    username,
-                    resolveIp(httpRequest),
-                    httpRequest.getHeader("User-Agent"),
-                    AuditAction.ACCESS_DENIED,
-                    "USER",
-                    username,
-                    "EXPIRED",
-                    "{\"reason\":\"Temporary access session expired\"}"
-                );
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Access expired. Your temporary access grant has ended. Please contact your administrator."));
-            }
-
-            long remainingSeconds;
-            Duration tokenDuration;
-            OffsetDateTime expiresAt;
-
-            if (granted.isTemporary()) {
-                if (granted.expiresAt() == null) {
-                    // Activate session on login for the exact duration specified by the administrator
-                    long grantSec = (granted.durationSeconds() != null && granted.durationSeconds() > 0)
-                        ? granted.durationSeconds()
-                        : 300L;
-                    expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(grantSec);
-                    remainingSeconds = grantSec;
-
-                    GrantedUserRecord activated = new GrantedUserRecord(
-                        granted.username(),
-                        granted.password(),
-                        granted.fullName(),
-                        granted.email(),
-                        granted.role(),
-                        granted.permissions(),
-                        granted.assignedFolderIds(),
-                        granted.accessibleMenus(),
-                        true,
-                        granted.durationSeconds(),
-                        expiresAt,
-                        granted.createdAt()
-                    );
-                    GRANTED_USERS.put(username.toLowerCase(), activated);
-                } else {
-                    remainingSeconds = Math.max(1, Duration.between(OffsetDateTime.now(), granted.expiresAt()).getSeconds());
-                    expiresAt = granted.expiresAt();
-                }
-                tokenDuration = Duration.ofSeconds(remainingSeconds);
-            } else {
-                remainingSeconds = 28800L; // 8 hours permanent session
-                tokenDuration = Duration.ofSeconds(remainingSeconds);
-                expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plus(tokenDuration);
-            }
-
-            String token = jwtTokenService.generateToken(
-                "usr-" + username.toLowerCase(),
-                granted.username(),
-                granted.fullName(),
-                granted.email() != null ? granted.email() : (granted.username() + "@arkaa-digital.local"),
-                granted.role(),
-                granted.permissions(),
-                granted.assignedFolderIds() != null ? granted.assignedFolderIds() : Collections.emptyList(),
-                tokenDuration,
-                granted.isTemporary()
-            );
-
-            auditService.recordAction(
-                UUID.randomUUID().toString(),
-                null,
-                granted.username(),
-                resolveIp(httpRequest),
-                httpRequest.getHeader("User-Agent"),
-                AuditAction.LOGIN,
-                "USER",
-                "usr-" + username.toLowerCase(),
-                "SUCCESS",
-                String.format("{\"username\":\"%s\",\"role\":\"%s\",\"sessionType\":\"%s\",\"lifetimeSeconds\":%d}",
-                    granted.username(), granted.role(), granted.isTemporary() ? "Temporary Access" : "Permanent Session", remainingSeconds)
-            );
-
-            return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .tokenType("Bearer")
-                .expiresInSeconds(remainingSeconds)
-                .expiresAt(expiresAt)
-                .isTemporaryAccess(granted.isTemporary())
-                .user(AuthResponse.UserProfile.builder()
-                    .id("usr-" + username.toLowerCase())
-                    .username(granted.username())
-                    .fullName(granted.fullName())
-                    .email(granted.email() != null ? granted.email() : (granted.username() + "@arkaa-digital.local"))
-                    .role(granted.role())
-                    .permissions(granted.permissions())
-                    .assignedFolderIds(granted.assignedFolderIds() != null ? granted.assignedFolderIds() : Collections.emptyList())
-                    .accessibleMenus(granted.accessibleMenus() != null ? granted.accessibleMenus() : List.of("/documents", "/search"))
-                    .build())
-                .build());
-        }
-
-        // 2. Check preset users
-        if (DELETED_PRESET_USERS.contains(username.toLowerCase())) {
+        Optional<User> userOpt = userRepository.findByUsernameIgnoreCase(username);
+        if (userOpt.isEmpty()) {
             auditService.recordAction(
                 UUID.randomUUID().toString(),
                 null,
@@ -272,15 +109,42 @@ public class AuthController {
                 "USER",
                 username,
                 "FAILED",
-                "{\"reason\":\"Attempted login to deleted user account\"}"
+                "{\"reason\":\"User account not found in database\"}"
             );
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("error", "This user account has been deleted."));
+                .body(Map.of("error", "Invalid username or password"));
         }
 
-        UserCredentials preset = PRESET_USERS.get(username.toLowerCase());
-        if (preset != null) {
-            if (!preset.password().equals(password)) {
+        User user = userOpt.get();
+
+        // Check password
+        String storedPassword = user.getPasswordHash();
+        if (storedPassword == null || storedPassword.isBlank()) {
+            if ("admin".equalsIgnoreCase(user.getUsername())) {
+                storedPassword = "Admin123!";
+            }
+        }
+
+        if (storedPassword == null || !storedPassword.equals(password)) {
+            auditService.recordAction(
+                UUID.randomUUID().toString(),
+                null,
+                username,
+                resolveIp(httpRequest),
+                httpRequest.getHeader("User-Agent"),
+                AuditAction.ACCESS_DENIED,
+                "USER",
+                user.getId().toString(),
+                "FAILED",
+                "{\"reason\":\"Invalid user password\"}"
+            );
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", "Invalid username or password"));
+        }
+
+        // Check if temporary access account is expired
+        if (Boolean.TRUE.equals(user.getIsTemporary())) {
+            if (user.getExpiresAt() != null && OffsetDateTime.now(ZoneOffset.UTC).isAfter(user.getExpiresAt())) {
                 auditService.recordAction(
                     UUID.randomUUID().toString(),
                     null,
@@ -289,121 +153,116 @@ public class AuthController {
                     httpRequest.getHeader("User-Agent"),
                     AuditAction.ACCESS_DENIED,
                     "USER",
-                    username,
+                    user.getId().toString(),
                     "FAILED",
-                    "{\"reason\":\"Invalid preset user password\"}"
+                    "{\"reason\":\"Temporary user account has expired\"}"
                 );
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Invalid username or password"));
+                    .body(Map.of("error", "This temporary access session has expired. Please contact an administrator."));
             }
 
-            Duration sessionDuration = Duration.ofHours(8); // Standard 8-hour admin session
-            OffsetDateTime expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plus(sessionDuration);
-
-            String token = jwtTokenService.generateToken(
-                preset.id(),
-                preset.username(),
-                preset.fullName(),
-                preset.email(),
-                preset.role(),
-                preset.permissions(),
-                preset.assignedFolderIds(),
-                sessionDuration,
-                false
-            );
-
-            auditService.recordAction(
-                UUID.randomUUID().toString(),
-                null,
-                preset.username(),
-                resolveIp(httpRequest),
-                httpRequest.getHeader("User-Agent"),
-                AuditAction.LOGIN,
-                "USER",
-                preset.id(),
-                "SUCCESS",
-                String.format("{\"username\":\"%s\",\"role\":\"%s\",\"sessionType\":\"Permanent Session\",\"lifetimeSeconds\":%d}",
-                    preset.username(), preset.role(), sessionDuration.getSeconds())
-            );
-
-            return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .tokenType("Bearer")
-                .expiresInSeconds(sessionDuration.getSeconds())
-                .expiresAt(expiresAt)
-                .isTemporaryAccess(false)
-                .user(AuthResponse.UserProfile.builder()
-                    .id(preset.id())
-                    .username(preset.username())
-                    .fullName(preset.fullName())
-                    .email(preset.email())
-                    .role(preset.role())
-                    .permissions(preset.permissions())
-                    .assignedFolderIds(preset.assignedFolderIds())
-                    .accessibleMenus(preset.accessibleMenus())
-                    .build())
-                .build());
+            // If first login and durationSeconds is set, activate expiresAt
+            if (user.getExpiresAt() == null && user.getDurationSeconds() != null && user.getDurationSeconds() > 0) {
+                user.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(user.getDurationSeconds()));
+                userRepository.save(user);
+            }
         }
+
+        // Determine session duration
+        Duration sessionDuration = (user.getDurationSeconds() != null && user.getDurationSeconds() > 0)
+            ? Duration.ofSeconds(user.getDurationSeconds())
+            : Duration.ofHours(8);
+
+        OffsetDateTime sessionExpiresAt = user.getExpiresAt() != null
+            ? user.getExpiresAt()
+            : OffsetDateTime.now(ZoneOffset.UTC).plus(sessionDuration);
+
+        List<String> perms = parseCsvList(user.getPermissions(), defaultPermissionsForRole(user.getRole()));
+        List<String> folders = parseCsvList(user.getAssignedFolderIds(), Collections.emptyList());
+        List<String> menus = parseCsvList(user.getAccessibleMenus(), defaultMenusForRole(user.getRole()));
+
+        String token = jwtTokenService.generateToken(
+            user.getId().toString(),
+            user.getUsername(),
+            user.getFullName() != null ? user.getFullName() : user.getUsername(),
+            user.getEmail(),
+            user.getRole() != null ? user.getRole() : "VIEWER",
+            perms,
+            folders,
+            sessionDuration,
+            Boolean.TRUE.equals(user.getIsTemporary())
+        );
 
         auditService.recordAction(
             UUID.randomUUID().toString(),
             null,
-            username,
+            user.getUsername(),
             resolveIp(httpRequest),
             httpRequest.getHeader("User-Agent"),
-            AuditAction.ACCESS_DENIED,
+            AuditAction.LOGIN,
             "USER",
-            username,
-            "FAILED",
-            "{\"reason\":\"User account not found\"}"
+            user.getId().toString(),
+            "SUCCESS",
+            String.format("{\"username\":\"%s\",\"role\":\"%s\",\"sessionType\":\"%s\",\"lifetimeSeconds\":%d}",
+                user.getUsername(), user.getRole(),
+                Boolean.TRUE.equals(user.getIsTemporary()) ? "Temporary" : "Standard",
+                sessionDuration.getSeconds())
         );
 
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(Map.of("error", "Invalid username or password"));
+        return ResponseEntity.ok(AuthResponse.builder()
+            .token(token)
+            .tokenType("Bearer")
+            .expiresInSeconds(sessionDuration.getSeconds())
+            .expiresAt(sessionExpiresAt)
+            .isTemporaryAccess(Boolean.TRUE.equals(user.getIsTemporary()))
+            .user(AuthResponse.UserProfile.builder()
+                .id(user.getId().toString())
+                .username(user.getUsername())
+                .fullName(user.getFullName() != null ? user.getFullName() : user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole() != null ? user.getRole() : "VIEWER")
+                .permissions(perms)
+                .assignedFolderIds(folders)
+                .accessibleMenus(menus)
+                .build())
+            .build());
     }
 
     @GetMapping("/users")
     public ResponseEntity<List<Map<String, Object>>> listUsers() {
+        List<User> dbUsers = userRepository.findAll();
+
+        // Sort: admin first, then alphabetical
+        dbUsers.sort((a, b) -> {
+            if ("admin".equalsIgnoreCase(a.getUsername())) return -1;
+            if ("admin".equalsIgnoreCase(b.getUsername())) return 1;
+            return a.getUsername().compareToIgnoreCase(b.getUsername());
+        });
+
         List<Map<String, Object>> result = new ArrayList<>();
+        for (User u : dbUsers) {
+            String role = u.getRole() != null ? u.getRole() : "VIEWER";
+            List<String> perms = parseCsvList(u.getPermissions(), defaultPermissionsForRole(role));
+            List<String> folders = parseCsvList(u.getAssignedFolderIds(), Collections.emptyList());
+            List<String> menus = parseCsvList(u.getAccessibleMenus(), defaultMenusForRole(role));
 
-        // Add preset users (unless deleted or customized in GRANTED_USERS)
-        for (UserCredentials u : PRESET_USERS.values()) {
-            String key = u.username().toLowerCase();
-            if (DELETED_PRESET_USERS.contains(key) || GRANTED_USERS.containsKey(key)) {
-                continue;
-            }
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", u.id());
-            map.put("username", u.username());
-            map.put("fullName", u.fullName());
-            map.put("email", u.email());
-            map.put("role", u.role());
-            map.put("permissions", u.permissions());
-            map.put("assignedFolderIds", u.assignedFolderIds());
-            map.put("accessibleMenus", u.accessibleMenus());
-            map.put("isTemporary", false);
-            map.put("isPreset", true);
-            map.put("status", "ACTIVE");
-            result.add(map);
-        }
+            boolean expired = Boolean.TRUE.equals(u.getIsTemporary()) && u.getExpiresAt() != null
+                && OffsetDateTime.now(ZoneOffset.UTC).isAfter(u.getExpiresAt());
 
-        // Add created and granted users
-        for (GrantedUserRecord g : GRANTED_USERS.values()) {
-            boolean expired = g.isTemporary() && g.expiresAt() != null && OffsetDateTime.now().isAfter(g.expiresAt());
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", "usr-" + g.username().toLowerCase());
-            map.put("username", g.username());
-            map.put("fullName", g.fullName());
-            map.put("email", g.email() != null ? g.email() : (g.username() + "@arkaa-digital.local"));
-            map.put("role", g.role());
-            map.put("permissions", g.permissions());
-            map.put("assignedFolderIds", g.assignedFolderIds() != null ? g.assignedFolderIds() : Collections.emptyList());
-            map.put("accessibleMenus", g.accessibleMenus() != null ? g.accessibleMenus() : Collections.emptyList());
-            map.put("isTemporary", g.isTemporary());
-            map.put("durationSeconds", g.durationSeconds());
+            map.put("id", u.getId().toString());
+            map.put("username", u.getUsername());
+            map.put("fullName", u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername());
+            map.put("email", u.getEmail());
+            map.put("role", role);
+            map.put("permissions", perms);
+            map.put("assignedFolderIds", folders);
+            map.put("accessibleMenus", menus);
+            map.put("isTemporary", Boolean.TRUE.equals(u.getIsTemporary()));
+            map.put("durationSeconds", u.getDurationSeconds() != null ? u.getDurationSeconds() : 0);
+            map.put("expiresAt", u.getExpiresAt());
+            map.put("status", expired ? "EXPIRED" : (u.getStatus() != null ? u.getStatus() : "ACTIVE"));
             map.put("isPreset", false);
-            map.put("expiresAt", g.expiresAt());
-            map.put("status", expired ? "EXPIRED" : "ACTIVE");
             result.add(map);
         }
 
@@ -411,204 +270,166 @@ public class AuthController {
     }
 
     @PostMapping("/users")
+    @Transactional
     public ResponseEntity<?> createUser(@RequestBody CreateUserRequest req) {
         if (req.getUsername() == null || req.getUsername().isBlank() ||
             req.getPassword() == null || req.getPassword().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Username and password are required"));
         }
 
-        String username = req.getUsername().trim().toLowerCase();
-        if ((PRESET_USERS.containsKey(username) && !DELETED_PRESET_USERS.contains(username)) || GRANTED_USERS.containsKey(username)) {
+        String username = req.getUsername().trim();
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "Username '" + username + "' is already registered. Please choose another."));
+                .body(Map.of("error", "Username '" + username + "' is already registered in the database. Please choose another."));
         }
-        DELETED_PRESET_USERS.remove(username);
 
         String fullName = req.getFullName() != null && !req.getFullName().isBlank()
             ? req.getFullName().trim()
-            : req.getUsername().trim();
+            : username;
 
         String email = req.getEmail() != null && !req.getEmail().isBlank()
             ? req.getEmail().trim()
-            : username + "@arkaa-digital.local";
+            : username.toLowerCase() + "@arkaa-digital.local";
 
         String role = req.getRole() != null ? req.getRole().toUpperCase() : "VIEWER";
 
-        List<String> perms = req.getPermissions();
-        if (perms == null || perms.isEmpty()) {
-            perms = switch (role) {
-                case "SUPER_ADMIN" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS", "AUDIT_READ");
-                case "DEPARTMENT_MANAGER" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS");
-                case "CONTRIBUTOR" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "PRINT");
-                case "AUDITOR" -> List.of("VIEW", "AUDIT_READ");
-                default -> List.of("VIEW");
-            };
-        }
+        List<String> perms = (req.getPermissions() != null && !req.getPermissions().isEmpty())
+            ? req.getPermissions()
+            : defaultPermissionsForRole(role);
 
-        List<String> folders = req.getAssignedFolderIds() != null ? req.getAssignedFolderIds() : Collections.emptyList();
+        List<String> folders = req.getAssignedFolderIds() != null
+            ? req.getAssignedFolderIds()
+            : Collections.emptyList();
 
-        List<String> menus = req.getAccessibleMenus();
-        if (menus == null || menus.isEmpty()) {
-            menus = switch (role) {
-                case "SUPER_ADMIN" -> List.of("/documents", "/search", "/audit", "/admin");
-                case "DEPARTMENT_MANAGER", "AUDITOR" -> List.of("/documents", "/search", "/audit");
-                default -> List.of("/documents", "/search");
-            };
-        }
+        List<String> menus = (req.getAccessibleMenus() != null && !req.getAccessibleMenus().isEmpty())
+            ? req.getAccessibleMenus()
+            : defaultMenusForRole(role);
 
         boolean isTemp = req.isTemporary() || (req.getDurationSeconds() != null && req.getDurationSeconds() > 0);
 
-        GrantedUserRecord record = new GrantedUserRecord(
-            req.getUsername().trim(),
-            req.getPassword(),
-            fullName,
-            email,
-            role,
-            perms,
-            folders,
-            menus,
-            isTemp,
-            req.getDurationSeconds(),
-            null, // expiresAt will be activated on user's first login
-            OffsetDateTime.now(ZoneOffset.UTC)
-        );
+        User newUser = User.builder()
+            .keycloakId(UUID.randomUUID().toString())
+            .username(username)
+            .fullName(fullName)
+            .email(email)
+            .passwordHash(req.getPassword())
+            .role(role)
+            .permissions(String.join(",", perms))
+            .assignedFolderIds(String.join(",", folders))
+            .accessibleMenus(String.join(",", menus))
+            .isTemporary(isTemp)
+            .durationSeconds(req.getDurationSeconds())
+            .status("ACTIVE")
+            .build();
 
-        GRANTED_USERS.put(username, record);
+        User saved = userRepository.save(newUser);
 
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("message", "User created successfully with assigned folder access and role permissions");
-        resp.put("username", record.username());
-        resp.put("role", record.role());
-        resp.put("assignedFolderIds", record.assignedFolderIds());
-        resp.put("accessibleMenus", record.accessibleMenus());
-        resp.put("permissions", record.permissions());
-        resp.put("isTemporary", record.isTemporary());
-        resp.put("durationSeconds", record.durationSeconds() != null ? record.durationSeconds() : 0);
+        resp.put("message", "User created successfully in database");
+        resp.put("id", saved.getId().toString());
+        resp.put("username", saved.getUsername());
+        resp.put("role", saved.getRole());
+        resp.put("fullName", saved.getFullName());
+        resp.put("email", saved.getEmail());
+        resp.put("assignedFolderIds", folders);
+        resp.put("accessibleMenus", menus);
+        resp.put("permissions", perms);
+        resp.put("isTemporary", isTemp);
+        resp.put("durationSeconds", saved.getDurationSeconds() != null ? saved.getDurationSeconds() : 0);
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
     }
 
     @PutMapping("/users/{username}")
+    @Transactional
     public ResponseEntity<?> updateUser(@PathVariable String username, @RequestBody CreateUserRequest req) {
-        String key = username.trim().toLowerCase();
-
-        // 1. Check if user is in GRANTED_USERS
-        GrantedUserRecord existing = GRANTED_USERS.get(key);
-        String finalPassword = (req.getPassword() != null && !req.getPassword().isBlank())
-            ? req.getPassword()
-            : (existing != null ? existing.password() : "Admin123!");
-
-        // If preset user, allow customizing permissions, folder access, full name, email
-        UserCredentials preset = PRESET_USERS.get(key);
-        if (preset != null && existing == null) {
-            finalPassword = (req.getPassword() != null && !req.getPassword().isBlank())
-                ? req.getPassword()
-                : preset.password();
+        String cleanUsername = username.trim();
+        Optional<User> userOpt = userRepository.findByUsernameIgnoreCase(cleanUsername);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User '" + username + "' not found in database."));
         }
 
-        if (existing == null && (preset == null || DELETED_PRESET_USERS.contains(key))) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found"));
+        User user = userOpt.get();
+        boolean isRoot = "admin".equalsIgnoreCase(user.getUsername());
+
+        if (req.getFullName() != null && !req.getFullName().isBlank()) {
+            user.setFullName(req.getFullName().trim());
         }
 
-        String fullName = req.getFullName() != null && !req.getFullName().isBlank()
-            ? req.getFullName().trim()
-            : (existing != null ? existing.fullName() : preset.fullName());
-
-        String email = req.getEmail() != null && !req.getEmail().isBlank()
-            ? req.getEmail().trim()
-            : (existing != null ? existing.email() : preset.email());
-
-        String role = req.getRole() != null ? req.getRole().toUpperCase() : (existing != null ? existing.role() : preset.role());
-
-        List<String> perms = req.getPermissions();
-        if (perms == null || perms.isEmpty()) {
-            perms = existing != null ? existing.permissions() : preset.permissions();
+        if (req.getEmail() != null && !req.getEmail().isBlank()) {
+            user.setEmail(req.getEmail().trim());
         }
 
-        List<String> folders = req.getAssignedFolderIds() != null
-            ? req.getAssignedFolderIds()
-            : (existing != null ? existing.assignedFolderIds() : Collections.emptyList());
-
-        boolean isTemp = req.isTemporary();
-        Long duration = req.getDurationSeconds();
-
-        // Root administrator protections
-        if ("admin".equals(key)) {
-            role = "SUPER_ADMIN";
-            isTemp = false;
-            duration = null;
+        if (req.getPassword() != null && !req.getPassword().isBlank()) {
+            user.setPasswordHash(req.getPassword().trim());
         }
 
-        List<String> menus = req.getAccessibleMenus();
-        if (menus == null || menus.isEmpty()) {
-            menus = existing != null && existing.accessibleMenus() != null
-                ? existing.accessibleMenus()
-                : (preset != null ? preset.accessibleMenus() : List.of("/documents", "/search"));
-        }
-        if ("admin".equals(key)) {
-            List<String> mList = new ArrayList<>(menus);
-            if (!mList.contains("/admin")) mList.add("/admin");
-            menus = mList;
+        if (!isRoot && req.getRole() != null && !req.getRole().isBlank()) {
+            user.setRole(req.getRole().toUpperCase());
+        } else if (isRoot) {
+            user.setRole("SUPER_ADMIN");
         }
 
-        GrantedUserRecord updatedRecord = new GrantedUserRecord(
-            key,
-            finalPassword,
-            fullName,
-            email,
-            role,
-            perms,
-            folders,
-            menus,
-            isTemp,
-            duration,
-            null, // Reset expiresAt so new duration takes effect upon user login
-            OffsetDateTime.now(ZoneOffset.UTC)
-        );
+        if (req.getPermissions() != null && !req.getPermissions().isEmpty()) {
+            user.setPermissions(String.join(",", req.getPermissions()));
+        }
 
-        GRANTED_USERS.put(key, updatedRecord);
+        if (req.getAssignedFolderIds() != null) {
+            user.setAssignedFolderIds(String.join(",", req.getAssignedFolderIds()));
+        }
+
+        if (req.getAccessibleMenus() != null && !req.getAccessibleMenus().isEmpty()) {
+            List<String> menus = new ArrayList<>(req.getAccessibleMenus());
+            if (isRoot && !menus.contains("/admin")) menus.add("/admin");
+            user.setAccessibleMenus(String.join(",", menus));
+        }
+
+        if (!isRoot) {
+            boolean isTemp = req.isTemporary() || (req.getDurationSeconds() != null && req.getDurationSeconds() > 0);
+            user.setIsTemporary(isTemp);
+            user.setDurationSeconds(req.getDurationSeconds());
+            user.setExpiresAt(null);
+        }
+
+        User saved = userRepository.save(user);
+
+        List<String> perms = parseCsvList(saved.getPermissions(), defaultPermissionsForRole(saved.getRole()));
+        List<String> folders = parseCsvList(saved.getAssignedFolderIds(), Collections.emptyList());
+        List<String> menus = parseCsvList(saved.getAccessibleMenus(), defaultMenusForRole(saved.getRole()));
 
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("message", "User " + username + " updated successfully");
-        resp.put("username", key);
-        resp.put("role", updatedRecord.role());
-        resp.put("fullName", updatedRecord.fullName());
-        resp.put("email", updatedRecord.email());
-        resp.put("assignedFolderIds", updatedRecord.assignedFolderIds());
-        resp.put("accessibleMenus", updatedRecord.accessibleMenus());
-        resp.put("permissions", updatedRecord.permissions());
-        resp.put("isTemporary", updatedRecord.isTemporary());
-        resp.put("durationSeconds", updatedRecord.durationSeconds() != null ? updatedRecord.durationSeconds() : 0);
-        resp.put("expiresAt", updatedRecord.expiresAt() != null ? updatedRecord.expiresAt() : "");
+        resp.put("message", "User " + saved.getUsername() + " updated successfully");
+        resp.put("id", saved.getId().toString());
+        resp.put("username", saved.getUsername());
+        resp.put("fullName", saved.getFullName());
+        resp.put("email", saved.getEmail());
+        resp.put("role", saved.getRole());
+        resp.put("assignedFolderIds", folders);
+        resp.put("accessibleMenus", menus);
+        resp.put("permissions", perms);
+        resp.put("isTemporary", Boolean.TRUE.equals(saved.getIsTemporary()));
+        resp.put("durationSeconds", saved.getDurationSeconds() != null ? saved.getDurationSeconds() : 0);
         return ResponseEntity.ok(resp);
     }
 
     @DeleteMapping("/users/{username}")
+    @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable String username) {
-        String key = username.trim().toLowerCase();
-        if ("admin".equals(key)) {
+        String cleanUsername = username.trim();
+        if ("admin".equalsIgnoreCase(cleanUsername)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Root administrator account 'admin' cannot be deleted."));
         }
 
-        boolean removed = false;
-        if (GRANTED_USERS.remove(key) != null) {
-            removed = true;
-        }
-        if (PRESET_USERS.containsKey(key)) {
-            DELETED_PRESET_USERS.add(key);
-            removed = true;
+        Optional<User> userOpt = userRepository.findByUsernameIgnoreCase(cleanUsername);
+        if (userOpt.isPresent()) {
+            userRepository.delete(userOpt.get());
+            return ResponseEntity.ok(Map.of("message", "User " + username + " successfully removed from database"));
         }
 
-        try {
-            userRepository.findByUsername(key).ifPresent(userRepository::delete);
-        } catch (Exception ignored) {}
-
-        if (removed) {
-            return ResponseEntity.ok(Map.of("message", "User " + username + " successfully removed"));
-        }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found"));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found in database"));
     }
 
     @PostMapping("/grant-user")
+    @Transactional
     public ResponseEntity<?> grantTemporaryUser(@RequestBody GrantUserAccessRequest req) {
         if (req.getUsername() == null || req.getPassword() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -617,43 +438,44 @@ public class AuthController {
 
         long durationSec = req.getDurationSeconds() != null && req.getDurationSeconds() > 0
             ? req.getDurationSeconds()
-            : 900L; // default 15 minutes
+            : 900L;
 
         OffsetDateTime expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(durationSec);
 
-        List<String> perms = req.getPermissions();
-        if (perms == null || perms.isEmpty()) {
-            perms = "CONTRIBUTOR".equalsIgnoreCase(req.getRole())
-                ? List.of("VIEW", "UPLOAD", "DOWNLOAD", "PRINT")
-                : List.of("VIEW");
-        }
+        String role = req.getRole() != null ? req.getRole().toUpperCase() : "VIEWER";
+        List<String> perms = req.getPermissions() != null && !req.getPermissions().isEmpty()
+            ? req.getPermissions()
+            : defaultPermissionsForRole(role);
 
         String username = req.getUsername().trim();
         String fullName = req.getFullName() != null && !req.getFullName().isBlank()
             ? req.getFullName().trim()
             : "Granted User (" + username + ")";
 
-        GrantedUserRecord record = new GrantedUserRecord(
-            username,
-            req.getPassword(),
-            fullName,
-            username.toLowerCase() + "@temporary-access.local",
-            req.getRole() != null ? req.getRole().toUpperCase() : "VIEWER",
-            perms,
-            Collections.emptyList(),
-            List.of("/documents", "/search"),
-            true,
-            durationSec,
-            expiresAt,
-            OffsetDateTime.now(ZoneOffset.UTC)
-        );
+        User user = userRepository.findByUsernameIgnoreCase(username)
+            .orElseGet(() -> User.builder()
+                .keycloakId(UUID.randomUUID().toString())
+                .username(username)
+                .email(username.toLowerCase() + "@temporary-access.local")
+                .status("ACTIVE")
+                .build());
 
-        GRANTED_USERS.put(username.toLowerCase(), record);
+        user.setFullName(fullName);
+        user.setPasswordHash(req.getPassword());
+        user.setRole(role);
+        user.setPermissions(String.join(",", perms));
+        user.setAccessibleMenus("/documents,/search");
+        user.setAssignedFolderIds("");
+        user.setIsTemporary(true);
+        user.setDurationSeconds(durationSec);
+        user.setExpiresAt(expiresAt);
+
+        userRepository.save(user);
 
         return ResponseEntity.ok(Map.of(
             "message", "Temporary user access granted successfully",
             "username", username,
-            "role", record.role(),
+            "role", role,
             "durationSeconds", durationSec,
             "expiresAt", expiresAt
         ));
@@ -695,18 +517,29 @@ public class AuthController {
             }
         }
 
-        return ResponseEntity.ok(Map.of(
-            "id", claims.getSubject() != null ? claims.getSubject() : "usr-unknown",
-            "username", claims.getClaim("preferred_username") != null ? claims.getClaim("preferred_username") : "user",
-            "fullName", claims.getClaim("name") != null ? claims.getClaim("name") : "User",
-            "email", claims.getClaim("email") != null ? claims.getClaim("email") : "",
-            "role", claims.getClaim("role") != null ? claims.getClaim("role") : "VIEWER",
-            "permissions", permissions,
-            "assignedFolderIds", folders,
-            "isTemporaryAccess", Boolean.TRUE.equals(isTemporary),
-            "remainingSeconds", remainingSec,
-            "expiresAt", expiry != null ? expiry.toInstant().atOffset(ZoneOffset.UTC) : null
-        ));
+        String username = claims.getClaim("preferred_username") != null
+            ? claims.getClaim("preferred_username").toString()
+            : "admin";
+
+        List<String> menus = List.of("/documents", "/search");
+        Optional<User> dbUser = userRepository.findByUsernameIgnoreCase(username);
+        if (dbUser.isPresent()) {
+            menus = parseCsvList(dbUser.get().getAccessibleMenus(), defaultMenusForRole(dbUser.get().getRole()));
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("id", claims.getSubject() != null ? claims.getSubject() : "usr-unknown");
+        resp.put("username", username);
+        resp.put("fullName", claims.getClaim("name") != null ? claims.getClaim("name") : "User");
+        resp.put("email", claims.getClaim("email") != null ? claims.getClaim("email") : "");
+        resp.put("role", claims.getClaim("role") != null ? claims.getClaim("role") : "VIEWER");
+        resp.put("permissions", permissions);
+        resp.put("assignedFolderIds", folders);
+        resp.put("accessibleMenus", menus);
+        resp.put("isTemporaryAccess", Boolean.TRUE.equals(isTemporary));
+        resp.put("remainingSeconds", remainingSec);
+        resp.put("expiresAt", expiry != null ? expiry.toInstant().atOffset(ZoneOffset.UTC) : null);
+        return ResponseEntity.ok(resp);
     }
 
     @GetMapping("/keycloak-config")
