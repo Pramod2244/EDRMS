@@ -1,5 +1,9 @@
 server:
   port: ${SERVER_PORT:8081}
+  error:
+    include-message: always
+    include-stacktrace: always
+    include-exception: true
   servlet:
     context-path: /
   compression:

@@ -33,7 +33,8 @@ public class UserService {
         String username = currentUserContext.getCurrentUsername().orElse("admin");
         String email = currentUserContext.getCurrentUserEmail().orElse(username + "@arkaa-digital.local");
 
-        return userRepository.findByKeycloakId(keycloakId)
+        return userRepository.findByUsername(username)
+            .or(() -> userRepository.findByKeycloakId(keycloakId))
             .map(existing -> {
                 existing.setUsername(username);
                 existing.setEmail(email);

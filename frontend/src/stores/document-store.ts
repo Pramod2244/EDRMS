@@ -61,6 +61,7 @@ interface DocumentStoreState {
     checksum?: string
   ) => DocumentItem;
   deleteDocument: (documentId: string) => Promise<void>;
+  deleteDocumentPage: (documentId: string, pageNumber: number) => Promise<any[]>;
   ingestFromScanner: (deviceName: string, pageCount: number, folderId: string | null) => DocumentItem;
   setStorageProvider: (provider: "LOCAL" | "NAS" | "S3") => void;
   setOcrEngine: (engine: string) => void;
@@ -435,6 +436,30 @@ export const useDocumentStore = create<DocumentStoreState>()(
         set((state) => ({
           documents: state.documents.filter((d) => d.id !== documentId),
         }));
+      },
+
+      deleteDocumentPage: async (documentId: string, pageNumber: number) => {
+        const res = await fetch(`/api/documents/${documentId}/pages/${pageNumber}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `Failed to delete page ${pageNumber}`);
+        }
+        const updatedPages = await res.json();
+        set((state) => ({
+          documents: state.documents.map((d) =>
+            d.id === documentId
+              ? {
+                  ...d,
+                  pageCount: Array.isArray(updatedPages)
+                    ? updatedPages.length
+                    : Math.max(1, (d.pageCount || 1) - 1),
+                }
+              : d
+          ),
+        }));
+        return updatedPages;
       },
 
       ingestFromScanner: (deviceName: string, pageCount: number, folderId: string | null) => {

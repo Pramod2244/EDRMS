@@ -115,7 +115,18 @@ public class DocumentController {
             .orElseGet(() -> folderRepository.findByIsDeletedFalse().stream()
                 .findFirst()
                 .map(Folder::getId)
-                .orElse(UUID.fromString("6a893dc0-2afe-4861-b355-0531a6e90836")));
+                .orElseGet(() -> {
+                    User user = userService.syncUserByUsername("admin");
+                    Folder defaultFolder = folderRepository.save(Folder.builder()
+                        .name("General Documents")
+                        .parentId(null)
+                        .materializedPath("/")
+                        .depth(0)
+                        .ownerId(user.getId())
+                        .isDeleted(false)
+                        .build());
+                    return defaultFolder.getId();
+                }));
     }
 
     @GetMapping("/{id}/preview")
@@ -147,7 +158,18 @@ public class DocumentController {
 
         InputStream is = documentService.getDocumentPreviewStream(doc);
         String contentType = doc.getMimeType();
-        if (contentType == null || (!contentType.contains("pdf") && !contentType.startsWith("image/"))) {
+        String ext = (doc.getExtension() != null ? doc.getExtension() : "").toLowerCase();
+        if (ext.equals("pdf") || (doc.getName() != null && doc.getName().toLowerCase().endsWith(".pdf"))) {
+            contentType = MediaType.APPLICATION_PDF_VALUE;
+        } else if (ext.equals("png")) {
+            contentType = MediaType.IMAGE_PNG_VALUE;
+        } else if (ext.equals("jpg") || ext.equals("jpeg")) {
+            contentType = MediaType.IMAGE_JPEG_VALUE;
+        } else if (ext.equals("docx")) {
+            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        } else if (ext.equals("txt") || ext.equals("csv") || ext.equals("log") || ext.equals("json") || ext.equals("md")) {
+            contentType = MediaType.TEXT_PLAIN_VALUE;
+        } else if (contentType == null || (!contentType.contains("pdf") && !contentType.startsWith("image/"))) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
 
@@ -253,4 +275,46 @@ public class DocumentController {
         documentService.deleteDocument(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{id}/pages/{pageNumber}")
+    public ResponseEntity<List<DocumentPage>> deleteDocumentPage(
+        @PathVariable UUID id,
+        @PathVariable int pageNumber,
+        @RequestParam(value = "actor", required = false) String actorParam,
+        HttpServletRequest httpRequest
+    ) throws IOException {
+        Document doc = documentService.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
+
+        String actor = (actorParam != null && !actorParam.isBlank())
+            ? actorParam
+            : currentUserContext.getCurrentUsername().orElse("admin");
+
+        String ip = httpRequest.getHeader("X-Forwarded-For");
+        if (ip != null && !ip.isBlank()) {
+            ip = ip.split(",")[0].trim();
+        } else {
+            ip = httpRequest.getRemoteAddr();
+        }
+        if (ip == null || ip.isBlank() || ip.equals("0:0:0:0:0:0:0:1")) ip = "127.0.0.1";
+
+        List<DocumentPage> updatedPages = documentService.deleteDocumentPage(id, pageNumber, actor);
+
+        auditService.recordAction(
+            UUID.randomUUID().toString(),
+            null,
+            actor,
+            ip,
+            httpRequest.getHeader("User-Agent"),
+            AuditAction.DELETE,
+            "DOCUMENT_PAGE",
+            id + "#p" + pageNumber,
+            "SUCCESS",
+            String.format("{\"documentName\":\"%s\",\"action\":\"DELETE_PAGE\",\"pageNumber\":%d,\"remainingPages\":%d}",
+                doc.getName().replace("\"", "\\\""), pageNumber, updatedPages.size())
+        );
+
+        return ResponseEntity.ok(updatedPages);
+    }
+
 }

@@ -32,10 +32,7 @@ public class FileValidationService {
     @Value("${edrms.pipeline.max-file-size-bytes:104857600}")
     private long maxFileSizeBytes = 104857600L;
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-        "pdf", "txt", "csv", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-        "jpg", "jpeg", "png", "tiff", "tif"
-    );
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf");
 
     private static final Pattern SUSPICIOUS_FILENAME_PATTERN = Pattern.compile(".*[/\\\\:*?\"<>|\\x00-\\x1F].*");
 
@@ -56,7 +53,7 @@ public class FileValidationService {
         // 2. Extension validation
         String extension = extractExtension(sanitizedFilename);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("File extension ." + extension + " is not permitted in repository");
+            throw new IllegalArgumentException("Only PDF files (.pdf) are permitted in this repository. Found ." + extension);
         }
 
         // 3. Maximum size check

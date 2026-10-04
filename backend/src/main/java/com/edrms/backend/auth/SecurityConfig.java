@@ -23,9 +23,28 @@ import java.util.List;
 public class SecurityConfig implements WebMvcConfigurer {
 
     private final JwtAuthConverter jwtAuthConverter;
+    private final JwtTokenService jwtTokenService;
 
-    public SecurityConfig(JwtAuthConverter jwtAuthConverter) {
+    public SecurityConfig(JwtAuthConverter jwtAuthConverter, JwtTokenService jwtTokenService) {
         this.jwtAuthConverter = jwtAuthConverter;
+        this.jwtTokenService = jwtTokenService;
+    }
+
+    /**
+     * Only hand a bearer token to the JWT filter if it is valid. A stale/expired token left in the
+     * browser would otherwise cause a 401 even on permitAll endpoints (e.g. document upload).
+     */
+    @Bean
+    public org.springframework.security.oauth2.server.resource.web.BearerTokenResolver bearerTokenResolver() {
+        org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver delegate =
+            new org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver();
+        return request -> {
+            String token = delegate.resolve(request);
+            if (token == null) {
+                return null;
+            }
+            return jwtTokenService.validateToken(token).isPresent() ? token : null;
+        };
     }
 
     @Bean
@@ -45,6 +64,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
+                .bearerTokenResolver(bearerTokenResolver())
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
             );
 

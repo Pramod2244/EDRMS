@@ -19,7 +19,7 @@ public class NasStorageProvider implements StorageProvider {
 
     private volatile Path rootPath;
 
-    public NasStorageProvider(@Value("${edrms.storage.nas.root-path:/Volumes/NAS/edms_storage}") String rootDir) {
+    public NasStorageProvider(@Value("${edrms.storage.nas.root-path:./data/nas_storage}") String rootDir) {
         reconfigure(rootDir);
     }
 
@@ -27,7 +27,16 @@ public class NasStorageProvider implements StorageProvider {
         if (rootDir == null || rootDir.isBlank()) {
             rootDir = "./data/nas_storage";
         }
-        this.rootPath = Paths.get(rootDir).toAbsolutePath().normalize();
+        Path path = Paths.get(rootDir).toAbsolutePath().normalize();
+        if (!Files.exists(path) && rootDir.contains("/Volumes/NAS")) {
+            Path localNas = Paths.get("./data/nas_storage").toAbsolutePath().normalize();
+            try {
+                Files.createDirectories(localNas);
+                log.info("Configured NAS volume {} not mounted; falling back to local storage: {}", path, localNas);
+                path = localNas;
+            } catch (IOException ignored) {}
+        }
+        this.rootPath = path;
         try {
             Files.createDirectories(this.rootPath);
             log.info("NAS Storage Provider initialized at path: {}", this.rootPath);
@@ -76,9 +85,23 @@ public class NasStorageProvider implements StorageProvider {
 
     @Override
     public InputStream load(String key) {
-        Path targetPath = resolveAndValidate(key);
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+
+        Path targetPath = resolveAndValidate(cleanKey);
         if (!Files.exists(targetPath)) {
-            throw new RuntimeException("File not found in External NAS Box storage: " + key + " at path " + targetPath);
+            // Check fallback locations
+            Path fallbackNas = Paths.get("./data/nas_storage").toAbsolutePath().normalize().resolve(cleanKey).normalize();
+            if (Files.exists(fallbackNas)) {
+                targetPath = fallbackNas;
+            } else {
+                Path fallbackLocal = Paths.get("./data/storage").toAbsolutePath().normalize().resolve(cleanKey).normalize();
+                if (Files.exists(fallbackLocal)) {
+                    targetPath = fallbackLocal;
+                } else {
+                    throw new RuntimeException("File not found in External NAS Box storage: " + key + " at path " + targetPath);
+                }
+            }
         }
         try {
             return new BufferedInputStream(Files.newInputStream(targetPath));
@@ -99,7 +122,11 @@ public class NasStorageProvider implements StorageProvider {
 
     @Override
     public boolean exists(String key) {
-        return Files.exists(resolveAndValidate(key));
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+        if (Files.exists(resolveAndValidate(cleanKey))) return true;
+        if (Files.exists(Paths.get("./data/nas_storage").toAbsolutePath().normalize().resolve(cleanKey).normalize())) return true;
+        return Files.exists(Paths.get("./data/storage").toAbsolutePath().normalize().resolve(cleanKey).normalize());
     }
 
     @Override
@@ -133,7 +160,9 @@ public class NasStorageProvider implements StorageProvider {
     }
 
     private Path resolveAndValidate(String key) {
-        Path target = this.rootPath.resolve(key).normalize();
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+        Path target = this.rootPath.resolve(cleanKey).normalize();
         if (!target.startsWith(this.rootPath)) {
             throw new SecurityException("Path Traversal detected for NAS storage key: " + key);
         }
