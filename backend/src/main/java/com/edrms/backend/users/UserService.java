@@ -28,15 +28,26 @@ public class UserService {
 
     @Transactional
     public User syncCurrentUser() {
-        String keycloakId = currentUserContext.getCurrentUserKeycloakId()
-            .orElse("00000000-0000-0000-0000-000000000001");
+        Optional<String> currentKeycloakId = currentUserContext.getCurrentUserKeycloakId();
+        String keycloakId = currentKeycloakId.orElse("00000000-0000-0000-0000-000000000001");
         String username = currentUserContext.getCurrentUsername().orElse("admin");
         String email = currentUserContext.getCurrentUserEmail().orElse(username + "@arkaa-digital.local");
 
-        return userRepository.findByKeycloakId(keycloakId)
+        Optional<User> existingUser = userRepository.findByKeycloakId(keycloakId);
+        if (existingUser.isEmpty()) {
+            // Uploads may first create the demo user by username. Reuse it for
+            // unauthenticated local development instead of inserting a second
+            // row with the same unique username and failing folder creation.
+            existingUser = userRepository.findByUsername(username);
+        }
+
+        return existingUser
             .map(existing -> {
                 existing.setUsername(username);
                 existing.setEmail(email);
+                if (currentKeycloakId.isPresent()) {
+                    existing.setKeycloakId(keycloakId);
+                }
                 return userRepository.save(existing);
             })
             .orElseGet(() -> userRepository.save(User.builder()

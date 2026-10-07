@@ -149,7 +149,7 @@ export const useDocumentStore = create<DocumentStoreState>()(
           const res = await fetch("/api/folders/all");
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
               const mapped: FolderNode[] = data.map((f: any) => ({
                 id: f.id,
                 name: f.name,
@@ -161,7 +161,7 @@ export const useDocumentStore = create<DocumentStoreState>()(
                 const isValidCurrent = mapped.some((f) => f.id === state.selectedFolderId);
                 return {
                   folders: mapped,
-                  selectedFolderId: isValidCurrent ? state.selectedFolderId : mapped[0]?.id || null,
+                  selectedFolderId: isValidCurrent ? state.selectedFolderId : mapped[0]?.id ?? null,
                 };
               });
             }
@@ -214,52 +214,43 @@ export const useDocumentStore = create<DocumentStoreState>()(
         try {
           const isUUID = (str?: string | null) =>
             !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-          const sanitizedParentId = isUUID(parentId) ? parentId : null;
+          const sanitizedParentId = isUUID(parentId) && get().folders.some((folder) => folder.id === parentId)
+            ? parentId
+            : null;
           const res = await fetch("/api/folders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, parentId: sanitizedParentId }),
           });
-          if (res.ok) {
-            const created = await res.json();
-            const newFolder: FolderNode = {
-              id: created.id,
-              name: created.name,
-              parentId: created.parentId,
-              materializedPath: created.materializedPath,
-              depth: created.depth,
-            };
-            set((state) => ({
-              folders: [...state.folders, newFolder],
-              selectedFolderId: created.id,
-            }));
-            return newFolder;
+          if (!res.ok) {
+            const detail = await res.text();
+            let message = `Folder creation failed (HTTP ${res.status})`;
+            try {
+              const parsed = JSON.parse(detail);
+              message = parsed.message || parsed.error || message;
+            } catch {
+              if (detail && detail.length < 200) message = detail;
+            }
+            throw new Error(message);
           }
+
+          const created = await res.json();
+          const newFolder: FolderNode = {
+            id: created.id,
+            name: created.name,
+            parentId: created.parentId,
+            materializedPath: created.materializedPath,
+            depth: created.depth,
+          };
+          set((state) => ({
+            folders: [...state.folders, newFolder],
+            selectedFolderId: created.id,
+          }));
+          return newFolder;
         } catch (err) {
-          console.warn("Backend create folder failed, falling back to local:", err);
+          console.error("Backend folder creation failed:", err);
+          throw err;
         }
-
-        const id = `f-${Date.now()}`;
-        const parent = get().folders.find((f) => f.id === parentId);
-        const depth = parent ? parent.depth + 1 : 0;
-        const materializedPath = parent
-          ? `${parent.materializedPath}${id}/`
-          : `/${id}/`;
-
-        const newFolder: FolderNode = {
-          id,
-          name,
-          parentId,
-          materializedPath,
-          depth,
-        };
-
-        set((state) => ({
-          folders: [...state.folders, newFolder],
-          selectedFolderId: id,
-        }));
-
-        return newFolder;
       },
 
       deleteFolder: async (folderId: string) => {
