@@ -1,0 +1,108 @@
+{
+  "utc_time": "2026-10-07T17:42:35.229815+00:00",
+  "base_url": "http://127.0.0.1:8081",
+  "requests": 100,
+  "workers": 10,
+  "duration_seconds": 0.832,
+  "scope": "Unauthenticated read-only status smoke; not upload/OCR/NAS capacity certification",
+  "routes": {
+    "/actuator/health": {
+      "count": 14,
+      "status_counts": {
+        "503": 14
+      },
+      "expected_statuses": [
+        200
+      ],
+      "unexpected_count": 14,
+      "p50_ms": 168.85,
+      "p95_ms": 478.11,
+      "max_ms": 478.11
+    },
+    "/api/v1/admin/config/application": {
+      "count": 14,
+      "status_counts": {
+        "403": 14
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 0,
+      "p50_ms": 15.65,
+      "p95_ms": 289.64,
+      "max_ms": 289.64
+    },
+    "/api/v1/auth/users": {
+      "count": 15,
+      "status_counts": {
+        "200": 15
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 15,
+      "p50_ms": 30.36,
+      "p95_ms": 358.2,
+      "max_ms": 358.2
+    },
+    "/api/v1/documents": {
+      "count": 15,
+      "status_counts": {
+        "200": 15
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 15,
+      "p50_ms": 34.34,
+      "p95_ms": 319.86,
+      "max_ms": 319.86
+    },
+    "/api/v1/folders": {
+      "count": 14,
+      "status_counts": {
+        "200": 14
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 14,
+      "p50_ms": 29.33,
+      "p95_ms": 319.16,
+      "max_ms": 319.16
+    },
+    "/api/v1/recycle-bin": {
+      "count": 14,
+      "status_counts": {
+        "403": 14
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 0,
+      "p50_ms": 16.96,
+      "p95_ms": 291.04,
+      "max_ms": 291.04
+    },
+    "/api/v1/roles": {
+      "count": 14,
+      "status_counts": {
+        "403": 14
+      },
+      "expected_statuses": [
+        401,
+        403
+      ],
+      "unexpected_count": 0,
+      "p50_ms": 17.94,
+      "p95_ms": 290.38,
+      "max_ms": 290.38
+    }
+  },
+  "unexpected_responses": 58
+}

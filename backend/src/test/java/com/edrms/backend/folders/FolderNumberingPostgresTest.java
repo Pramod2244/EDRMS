@@ -28,15 +28,16 @@ class FolderNumberingPostgresTest {
             try(var connection=source.getConnection()) { ScriptUtils.executeSqlScript(connection,new ClassPathResource("db/migration/V6__folder_document_numbering.sql")); }
             var service=new FolderNumberingService(db);
             var saved=tx.execute(status->service.save(folder,new FolderNumberingService.Settings("MEDDOCS","NONE",4,1001,0)));
-            var executor=Executors.newFixedThreadPool(6);
+            final int concurrentAllocations=200;
+            var executor=Executors.newFixedThreadPool(12);
             List<Future<String>> results=new ArrayList<>();
             try {
-                for(int i=0;i<18;i++) results.add(executor.submit(()->tx.execute(status->service.allocate(folder))));
+                for(int i=0;i<concurrentAllocations;i++) results.add(executor.submit(()->tx.execute(status->service.allocate(folder))));
                 Set<String> ids=new HashSet<>();for(var result:results) ids.add(result.get(20,TimeUnit.SECONDS));
-                assertEquals(18,ids.size());assertTrue(ids.contains("MEDDOCS-1001"));assertTrue(ids.contains("MEDDOCS-1018"));
+                assertEquals(concurrentAllocations,ids.size());assertTrue(ids.contains("MEDDOCS-1001"));assertTrue(ids.contains("MEDDOCS-1200"));
             } finally {executor.shutdownNow();}
-            var latest=service.get(folder);assertEquals(1019,latest.nextNumber());
-            assertThrows(IllegalArgumentException.class,()->tx.execute(status->service.save(folder,new FolderNumberingService.Settings("MEDDOCS","NONE",4,1019,saved.revision()))));
+            var latest=service.get(folder);assertEquals(1201,latest.nextNumber());
+            assertThrows(IllegalArgumentException.class,()->tx.execute(status->service.save(folder,new FolderNumberingService.Settings("MEDDOCS","NONE",4,1201,saved.revision()))));
             assertThrows(IllegalArgumentException.class,()->tx.execute(status->service.save(folder,new FolderNumberingService.Settings("MEDDOCS","NONE",4,1001,latest.revision()))));
             tx.execute(status->service.save(folder,new FolderNumberingService.Settings("ADMDOCS","YEAR_MONTH_DAY",4,2000,latest.revision())));
             var otherConfig=service.get(other);

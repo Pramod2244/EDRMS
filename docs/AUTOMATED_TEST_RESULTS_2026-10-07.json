@@ -1,0 +1,406 @@
+{
+  "baseline": "538a469",
+  "branch": "codex/system-validation",
+  "tests": 66,
+  "passed": 66,
+  "failures": 0,
+  "skipped": 0,
+  "cases": [
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "rootAccountCannotBeDowngradedByRoleUpdate",
+      "seconds": 0.131,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "currentUserRejectsMissingAndInvalidToken",
+      "seconds": 0.017,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "missingPasswordRejected",
+      "seconds": 0.009,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "customRoleDefaultsAppliedWhenUserHasNoOverrides",
+      "seconds": 0.155,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "duplicateUsernameRejectedWithoutSaving",
+      "seconds": 0.009,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "incorrectPasswordDoesNotIssueToken",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "successfulLoginPreservesExplicitPermissionsAndExactFolderClaims",
+      "seconds": 0.011,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "firstTemporaryLoginStartsDeadlineOnce",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "expiredTemporaryAccountCannotLogin",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "creationPreservesSelectedRoleMenusPermissionsAndFolder",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "unknownUsernameReturnsSameCredentialError",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.auth.AuthWorkflowTest",
+      "test": "userCreationRejectsBlankCredentials",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.configuration.ApplicationSettingsServiceTest",
+      "test": "supportsStrictBooleanDefinitions",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.configuration.ApplicationSettingsServiceTest",
+      "test": "unknownSettingsCannotBeAddedByClients",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.configuration.ApplicationSettingsServiceTest",
+      "test": "validatesWholeNumberRange",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.configuration.ApplicationSettingsServiceTest",
+      "test": "nonAdministratorCannotChangeSettings",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.configuration.ApplicationSettingsServiceTest",
+      "test": "defaultsToThirtyDays",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.BulkIngestionPostgresTest",
+      "test": "concurrentUploadsPreserveBytesReferencesAndCompleteProcessing",
+      "seconds": 3.282,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "rejectsBlankPage",
+      "seconds": 0.542,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "readableScreenshotBelowFullPageSizeCanPass",
+      "seconds": 0.167,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "rejectsTinyDarkPageBeforeOcr",
+      "seconds": 0.01,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "smallerScreenshotStillRequiresConfidentOcr",
+      "seconds": 0.097,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "rejectsLowConfidenceEvenWhenTextWasDetected",
+      "seconds": 0.213,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "unavailableOcrCannotPassValidation",
+      "seconds": 0.178,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "reusesChecksOnlyForSameTokenAndBytes",
+      "seconds": 0.292,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "rejectsBlurredGradient",
+      "seconds": 0.18,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.CaptureQualityServiceTest",
+      "test": "requiresActualRecognizedText",
+      "seconds": 0.122,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.FileValidationServiceTest",
+      "test": "testDisallowedExtensionRejected",
+      "seconds": 0.123,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.FileValidationServiceTest",
+      "test": "testValidPdfFileInspection",
+      "seconds": 0.017,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.FileValidationServiceTest",
+      "test": "testSanitizeFilename",
+      "seconds": 0.015,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.MobileCaptureControllerTest",
+      "test": "expiredLinkCannotUpload",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.MobileCaptureControllerTest",
+      "test": "rejectedQualityDoesNotSaveOrCompleteLink",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.MobileCaptureControllerTest",
+      "test": "uploadRequiresExactFolderAssignment",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.MobileCaptureControllerTest",
+      "test": "capturesAreAssembledIntoPdfInOrder",
+      "seconds": 0.037,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.MobileCaptureControllerTest",
+      "test": "completedLinkDoesNotCreateDuplicateDocument",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinPurgerTest",
+      "test": "skipsRecoverableDocument",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinPurgerTest",
+      "test": "failedStorageDeletionKeepsMetadataForRetry",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinPurgerTest",
+      "test": "skipsActiveProcessing",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinPurgerTest",
+      "test": "expiredFilesAreDeletedFromRecordedProvider",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "restoresOriginalDocumentBeforeDeadline",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "cannotRestoreIntoDeletedFolder",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "cannotRestoreMissingOriginal",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "exactFolderPermissionsAreEnforced",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "cannotRestoreExpiredDocument",
+      "seconds": 0.002,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "deletionKeepsFilesAndSetsThirtyDayDeadline",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "repeatedDeleteDoesNotExtendDeadline",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.documents.RecycleBinServiceTest",
+      "test": "deletePermissionIsRequired",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "rejectsInvalidSequenceRange",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "dateBoundaryKeepsDistinctFormattedReferences",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "rejectsInvalidDateModesAndPadding",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "padsSmallNumbersWithoutTruncatingLargeNumbers",
+      "seconds": 0.0,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "rejectsMalformedOrUnsafePrefixes",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingFormatTest",
+      "test": "formatsEverySupportedDateModeExactly",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.folders.FolderNumberingPostgresTest",
+      "test": "concurrentUploadsEditsAndPrefixReservationsRemainUnique",
+      "seconds": 5.323,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.ScanTextQualityTest",
+      "test": "weightsConfidenceByRecognizedCharactersAndIgnoresNonWords",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.ScanTextQualityTest",
+      "test": "emptyOrMalformedOutputCannotPass",
+      "seconds": 0.0,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.TesseractOcrEngineTest",
+      "test": "scannedPdfIncludesPagesBeyondTwentyFive",
+      "seconds": 4.67,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.TesseractOcrEngineTest",
+      "test": "missingLanguageIsReportedAsFailure",
+      "seconds": 0.091,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.TesseractOcrEngineTest",
+      "test": "testEngineAvailability",
+      "seconds": 0.048,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.ocr.TesseractOcrEngineTest",
+      "test": "testOcrOnGeneratedImage",
+      "seconds": 0.153,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.roles.RoleCatalogServiceTest",
+      "test": "disallowsUnprivilegedManagement",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.roles.RoleCatalogServiceTest",
+      "test": "protectsBuiltInRoles",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.roles.RoleCatalogServiceTest",
+      "test": "rejectsUnknownPermissions",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.roles.RoleCatalogServiceTest",
+      "test": "createsCustomRoleWithoutChangingUsers",
+      "seconds": 0.001,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.storage.NasStorageProviderTest",
+      "test": "storesAndReadsOnlyConfiguredShare",
+      "seconds": 0.031,
+      "status": "PASS"
+    },
+    {
+      "class": "com.edrms.backend.storage.NasStorageProviderTest",
+      "test": "unavailableShareIsNotCreatedOrReplacedWithLocalStorage",
+      "seconds": 0.003,
+      "status": "PASS"
+    }
+  ]
+}
