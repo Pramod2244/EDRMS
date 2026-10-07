@@ -20,7 +20,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edrms}
     username: ${POSTGRES_USER:edrms_user}
-    password: ${POSTGRES_PASSWORD:edrms_secret}
+    password: ${POSTGRES_PASSWORD:12345678}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20

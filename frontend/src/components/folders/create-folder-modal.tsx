@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { FolderPlus, X } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 
@@ -13,16 +13,34 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
   const { folders, selectedFolderId, createFolder } = useDocumentStore();
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>(selectedFolderId || "");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const selectedFolderExists = folders.some((folder) => folder.id === selectedFolderId);
+    setParentId(selectedFolderExists ? selectedFolderId! : "");
+    setErrorMessage(null);
+  }, [isOpen, selectedFolderId, folders]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || isSubmitting) return;
 
-    createFolder(name.trim(), parentId ? parentId : null);
-    setName("");
-    onClose();
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const createdFolder = await createFolder(name.trim(), parentId || null);
+      if (!createdFolder) throw new Error("The folder was not saved. Please try again.");
+      setName("");
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not create the folder.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -80,6 +98,12 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
             </select>
           </div>
 
+          {errorMessage && (
+            <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {errorMessage}
+            </p>
+          )}
+
           <div className="flex items-center justify-end space-x-3 pt-2">
             <button
               type="button"
@@ -90,9 +114,10 @@ export default function CreateFolderModal({ isOpen, onClose }: CreateFolderModal
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="px-5 py-2 rounded-lg bg-orange-500 text-white font-semibold text-sm hover:bg-orange-600 transition shadow-xs"
             >
-              Create Folder
+              {isSubmitting ? "Creating…" : "Create Folder"}
             </button>
           </div>
         </form>

@@ -28,3 +28,6 @@ logs/
 *.log
 /infrastructure/data/
 /var/data/
+
+# Runtime uploads and generated document assets
+/backend/data/
