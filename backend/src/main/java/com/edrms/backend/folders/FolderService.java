@@ -17,6 +17,10 @@ public class FolderService {
         this.folderRepository = folderRepository;
     }
 
+    public List<Folder> getAllFolders() {
+        return folderRepository.findByIsDeletedFalse();
+    }
+
     public List<Folder> getRootFolders() {
         return folderRepository.findByParentIdIsNullAndIsDeletedFalse();
     }
@@ -65,5 +69,41 @@ public class FolderService {
             descendants.forEach(d -> d.setIsDeleted(true));
             folderRepository.saveAll(descendants);
         });
+    }
+
+    public String getFolderHierarchyPath(UUID folderId) {
+        if (folderId == null) {
+            return "Repository";
+        }
+
+        java.util.List<String> segments = new java.util.ArrayList<>();
+        UUID currentId = folderId;
+        int maxGuard = 50;
+
+        while (currentId != null && maxGuard-- > 0) {
+            java.util.Optional<Folder> folderOpt = folderRepository.findById(currentId);
+            if (folderOpt.isEmpty()) break;
+            Folder f = folderOpt.get();
+            String safeName = sanitizeFolderName(f.getName());
+            if (!safeName.isBlank()) {
+                segments.add(0, safeName);
+            }
+            currentId = f.getParentId();
+        }
+
+        if (segments.isEmpty()) {
+            return "Repository";
+        }
+
+        if (segments.get(0).equalsIgnoreCase("Repository")) {
+            return String.join("/", segments);
+        }
+
+        return "Repository/" + String.join("/", segments);
+    }
+
+    private String sanitizeFolderName(String name) {
+        if (name == null || name.isBlank()) return "Folder";
+        return name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
     }
 }

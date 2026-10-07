@@ -13,15 +13,26 @@ import java.util.HexFormat;
 @Component
 public class LocalStorageProvider implements StorageProvider {
 
-    private final Path rootPath;
+    private volatile Path rootPath;
 
     public LocalStorageProvider(@Value("${edrms.storage.local.root-path:/var/data/edrms/storage}") String rootDir) {
+        reconfigure(rootDir);
+    }
+
+    public synchronized void reconfigure(String rootDir) {
+        if (rootDir == null || rootDir.isBlank()) {
+            rootDir = "./data/storage";
+        }
         this.rootPath = Paths.get(rootDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.rootPath);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to create local storage root: " + this.rootPath, e);
         }
+    }
+
+    public String getRootPathString() {
+        return this.rootPath != null ? this.rootPath.toString() : "./data/storage";
     }
 
     @Override

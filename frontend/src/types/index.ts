@@ -29,9 +29,12 @@ export interface DocumentItem {
   fileSizeBytes: number;
   currentVersion: number;
   status: "PENDING" | "PROCESSING" | "INDEXED" | "FAILED";
-  storageProvider: "LOCAL" | "S3";
+  storageProvider: "LOCAL" | "NAS" | "S3" | string;
   pageCount: number | null;
   createdAt: string;
+  fileUrl?: string;
+  checksum?: string;
+  textContent?: string;
 }
 
 export interface SearchHit {

@@ -21,6 +21,10 @@ public class Document {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "tenant_id", nullable = false)
+    @Builder.Default
+    private UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @Column(name = "folder_id", nullable = false)
     private UUID folderId;
 

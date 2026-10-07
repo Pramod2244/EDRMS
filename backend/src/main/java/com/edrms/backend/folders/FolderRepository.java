@@ -8,6 +8,7 @@ import java.util.UUID;
 
 @Repository
 public interface FolderRepository extends JpaRepository<Folder, UUID> {
+    List<Folder> findByIsDeletedFalse();
     List<Folder> findByParentIdAndIsDeletedFalse(UUID parentId);
     List<Folder> findByParentIdIsNullAndIsDeletedFalse();
     List<Folder> findByMaterializedPathStartingWithAndIsDeletedFalse(String pathPrefix);

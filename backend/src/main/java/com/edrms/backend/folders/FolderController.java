@@ -28,6 +28,11 @@ public class FolderController {
         return ResponseEntity.ok(folderService.getRootFolders());
     }
 
+    @GetMapping("/all")
+    public ResponseEntity<List<Folder>> getAllFolders() {
+        return ResponseEntity.ok(folderService.getAllFolders());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Folder> getFolderById(@PathVariable UUID id) {
         return folderService.findById(id)

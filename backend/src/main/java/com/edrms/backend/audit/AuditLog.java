@@ -3,6 +3,8 @@ package com.edrms.backend.audit;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -48,6 +50,7 @@ public class AuditLog {
     @Builder.Default
     private String status = "SUCCESS";
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "details_json", columnDefinition = "JSONB")
     private String detailsJson;
 

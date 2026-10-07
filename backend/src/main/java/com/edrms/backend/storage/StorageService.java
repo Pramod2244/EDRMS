@@ -54,10 +54,13 @@ public class StorageService {
         return this.activeProviderType;
     }
 
-    public StorageResult store(InputStream inputStream, String originalFilename, long sizeBytes, String contentType) {
-        LocalDate now = LocalDate.now();
-        String fileKey = String.format("documents/%d/%02d/%s_%s",
-            now.getYear(), now.getMonthValue(), UUID.randomUUID(), sanitizeFilename(originalFilename));
+    public StorageResult store(InputStream inputStream, String originalFilename, long sizeBytes, String contentType, String folderPath) {
+        String cleanFolderPath = (folderPath != null && !folderPath.isBlank()) ? folderPath.trim() : "Repository";
+        while (cleanFolderPath.startsWith("/")) cleanFolderPath = cleanFolderPath.substring(1);
+        while (cleanFolderPath.endsWith("/")) cleanFolderPath = cleanFolderPath.substring(0, cleanFolderPath.length() - 1);
+
+        String fileKey = String.format("%s/%s_%s",
+            cleanFolderPath, UUID.randomUUID(), sanitizeFilename(originalFilename));
 
         StorageMetadata metadata = StorageMetadata.builder()
             .contentLength(sizeBytes)
@@ -65,6 +68,10 @@ public class StorageService {
             .build();
 
         return getActiveProvider().store(fileKey, inputStream, metadata);
+    }
+
+    public StorageResult store(InputStream inputStream, String originalFilename, long sizeBytes, String contentType) {
+        return store(inputStream, originalFilename, sizeBytes, contentType, "Repository");
     }
 
     public InputStream load(StorageProviderType providerType, String key) {

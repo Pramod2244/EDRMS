@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EDRMS - Enterprise Document Repository Management System",
-  description: "Enterprise platform for document scanning, OCR, processing, and governance.",
+  title: "EDMS Enterprise — Arkaa digital",
+  description: "Enterprise Document Management System by Arkaa digital.",
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-background font-sans antialiased text-foreground">
+    <html lang="en">
+      <body className="min-h-screen bg-background font-sans antialiased text-foreground selection:bg-orange-100 selection:text-orange-900">
         {children}
       </body>
     </html>

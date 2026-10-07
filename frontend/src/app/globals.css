@@ -4,24 +4,41 @@
 
 @layer base {
   :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 32% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 32% 20%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 32% 24%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 32% 20%;
-    --input: 217 32% 20%;
-    --ring: 224 76% 48%;
-    --radius: 0.5rem;
+    /* Enterprise White + Warm Orange Design Tokens */
+    --background: 210 40% 98%;        /* #F8FAFC - Main canvas background */
+    --foreground: 222 47% 11%;        /* #111827 - High contrast primary text */
+
+    --card: 0 0% 100%;                /* #FFFFFF - Crisp white cards and surfaces */
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 24.6 95% 53.1%;        /* #F97316 - Primary Warm Orange */
+    --primary-foreground: 0 0% 100%;  /* #FFFFFF - Crisp white text on primary */
+
+    --secondary: 210 40% 96%;         /* #F1F5F9 - Soft neutral slate */
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;  /* #64748B - Muted slate text */
+
+    --accent: 33 100% 96.5%;          /* #FFF7ED - Soft Orange highlight */
+    --accent-foreground: 24 95% 36%;  /* #C2410C - Deep Orange text on accent */
+
+    --destructive: 0 72% 51%;         /* #DC2626 - Semantic Red error */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;            /* #E2E8F0 - Crisp slate borders */
+    --input: 214 32% 91%;             /* #E2E8F0 */
+    --ring: 24.6 95% 53.1%;           /* #F97316 - Orange focus rings */
+    --radius: 0.5rem;                 /* 8px rounding */
+
+    /* Semantic helpers */
+    --orange-soft: 33 100% 96.5%;     /* #FFF7ED */
+    --orange-border: 32 98% 83%;      /* #FED7AA */
+    --orange-hover: 20.5 90.2% 48.2%; /* #EA580C */
+    --orange-active: 17.5 88.3% 40.4%;/* #C2410C */
   }
 }
 
@@ -29,4 +46,20 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom scrollbars for high-density enterprise view */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

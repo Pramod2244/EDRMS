@@ -14,13 +14,13 @@
     <artifactId>edrms-backend</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>edrms-backend</name>
-    <description>Enterprise Document Repository Management System (EDRMS) Backend</description>
+    <description>Enterprise Document Management System (EDMS) Backend</description>
 
     <properties>
         <java.version>21</java.version>
         <aws.sdk.version>2.27.17</aws.sdk.version>
         <tika.version>2.9.2</tika.version>
-        <pdfbox.version>3.0.3</pdfbox.version>
+        <pdfbox.version>2.0.31</pdfbox.version>
         <opensearch.client.version>2.13.0</opensearch.client.version>
     </properties>
 
@@ -118,6 +118,11 @@
             <version>${opensearch.client.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-rest-client</artifactId>
+            <version>${opensearch.client.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
         </dependency>
@@ -144,6 +149,22 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.34</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

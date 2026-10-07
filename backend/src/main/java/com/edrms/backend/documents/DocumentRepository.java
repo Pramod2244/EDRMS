@@ -12,5 +12,8 @@ import java.util.UUID;
 public interface DocumentRepository extends JpaRepository<Document, UUID> {
     Page<Document> findByFolderIdAndIsDeletedFalse(UUID folderId, Pageable pageable);
     List<Document> findByFolderIdAndIsDeletedFalse(UUID folderId);
+    List<Document> findByNameContainingIgnoreCaseAndIsDeletedFalse(String name);
     List<Document> findByStatus(String status);
+    boolean existsByChecksumSha256AndIsDeletedFalse(String checksumSha256);
+    List<Document> findByChecksumSha256AndIsDeletedFalse(String checksumSha256);
 }

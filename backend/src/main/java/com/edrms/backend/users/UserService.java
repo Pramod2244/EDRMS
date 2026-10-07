@@ -28,22 +28,53 @@ public class UserService {
 
     @Transactional
     public User syncCurrentUser() {
-        String keycloakId = currentUserContext.getCurrentUserKeycloakId()
-            .orElseThrow(() -> new IllegalStateException("No authenticated user in context"));
-        String username = currentUserContext.getCurrentUsername().orElse(keycloakId);
-        String email = currentUserContext.getCurrentUserEmail().orElse(username + "@edrms.local");
+        Optional<String> currentKeycloakId = currentUserContext.getCurrentUserKeycloakId();
+        String keycloakId = currentKeycloakId.orElse("00000000-0000-0000-0000-000000000001");
+        String username = currentUserContext.getCurrentUsername().orElse("admin");
+        String email = currentUserContext.getCurrentUserEmail().orElse(username + "@arkaa-digital.local");
 
-        return userRepository.findByKeycloakId(keycloakId)
+        Optional<User> existingUser = userRepository.findByKeycloakId(keycloakId);
+        if (existingUser.isEmpty()) {
+            // Uploads may first create the demo user by username. Reuse it for
+            // unauthenticated local development instead of inserting a second
+            // row with the same unique username and failing folder creation.
+            existingUser = userRepository.findByUsername(username);
+        }
+
+        return existingUser
             .map(existing -> {
                 existing.setUsername(username);
                 existing.setEmail(email);
+                if (currentKeycloakId.isPresent()) {
+                    existing.setKeycloakId(keycloakId);
+                }
                 return userRepository.save(existing);
             })
             .orElseGet(() -> userRepository.save(User.builder()
                 .keycloakId(keycloakId)
                 .username(username)
                 .email(email)
-                .fullName(username)
+                .fullName("Administrator")
+                .status("ACTIVE")
+                .build()));
+    }
+
+    @Transactional
+    public User syncUserByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return syncCurrentUser();
+        }
+        String raw = (username != null) ? username.trim() : "";
+        if (raw.contains(",")) {
+            raw = raw.split(",")[0].trim();
+        }
+        final String cleanUsername = raw.isEmpty() ? "admin" : raw;
+        return userRepository.findByUsername(cleanUsername)
+            .orElseGet(() -> userRepository.save(User.builder()
+                .keycloakId(UUID.randomUUID().toString())
+                .username(cleanUsername)
+                .email(cleanUsername + "@arkaa-digital.local")
+                .fullName(cleanUsername)
                 .status("ACTIVE")
                 .build()));
     }

@@ -2,6 +2,10 @@ server:
   port: ${SERVER_PORT:8081}
   servlet:
     context-path: /
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/pdf,image/png,image/jpeg,image/svg+xml
+    min-response-size: 1024
 
 spring:
   application:
@@ -12,7 +16,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edrms}
     username: ${POSTGRES_USER:edrms_user}
-    password: ${POSTGRES_PASSWORD:edrms_secret}
+    password: ${POSTGRES_PASSWORD:12345678}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -41,7 +45,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:replace_with_redis_password}
       timeout: 3000ms
 
   security:
@@ -59,7 +63,7 @@ edrms:
   storage:
     active-provider: ${STORAGE_ACTIVE_PROVIDER:LOCAL}
     local:
-      root-path: ${STORAGE_LOCAL_ROOT_PATH:/var/data/edrms/storage}
+      root-path: ${STORAGE_LOCAL_ROOT_PATH:./data/storage}
     s3:
       region: ${AWS_REGION:us-east-1}
       bucket-name: ${AWS_S3_BUCKET_NAME:edrms-documents-bucket}
@@ -68,7 +72,11 @@ edrms:
       endpoint: ${AWS_S3_ENDPOINT_URL:}
 
   ocr:
-    active-engine: ${OCR_ACTIVE_ENGINE:AWS_TEXTRACT}
+    active-engine: ${OCR_ACTIVE_ENGINE:LOCAL_TESSERACT}
+    tesseract:
+      binary-path: ${TESSERACT_BINARY_PATH:tesseract}
+      language: ${TESSERACT_LANGUAGE:eng}
+      threshold-characters: ${TESSERACT_THRESHOLD_CHARS:20}
     aws:
       region: ${AWS_REGION:us-east-1}
       access-key: ${AWS_ACCESS_KEY_ID:}
@@ -78,7 +86,12 @@ edrms:
     host: ${OPENSEARCH_HOST:localhost}
     port: ${OPENSEARCH_PORT:9200}
     scheme: ${OPENSEARCH_SCHEME:http}
-    index-name: ${OPENSEARCH_INDEX_NAME:edrms_documents}
+    index-name: ${OPENSEARCH_INDEX_NAME:edrms_document_pages_v1}
 
   security:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+    malware-scanner: ${MALWARE_SCANNER:DEV}
+
+  pipeline:
+    max-file-size-bytes: 104857600 # 100MB
+    allowed-extensions: pdf,docx,xlsx,pptx,txt,csv,jpg,jpeg,png,tiff
