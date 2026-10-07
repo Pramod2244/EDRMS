@@ -250,6 +250,7 @@ public class DocumentController {
     ) {
         Document doc = documentService.findById(id).orElse(null);
         String docName = doc != null ? doc.getName() : id.toString();
+        documentService.deleteDocument(id);
         String actor = (actorParam != null && !actorParam.isBlank()) ? actorParam : currentUserContext.getCurrentUsername().orElse("admin");
         String ip = httpRequest.getHeader("X-Forwarded-For");
         if (ip != null && !ip.isBlank()) {
@@ -272,7 +273,6 @@ public class DocumentController {
             String.format("{\"documentName\":\"%s\",\"action\":\"DELETE\"}", docName.replace("\"", "\\\""))
         );
 
-        documentService.deleteDocument(id);
         return ResponseEntity.noContent().build();
     }
 

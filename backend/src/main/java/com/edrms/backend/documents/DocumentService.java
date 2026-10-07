@@ -55,6 +55,7 @@ public class DocumentService {
     private final SearchService searchService;
     private final FolderService folderService;
     private final com.edrms.backend.folders.FolderNumberingService numbering;
+    private final RecycleBinService recycleBin;
 
     public DocumentService(
         DocumentRepository documentRepository,
@@ -68,7 +69,8 @@ public class DocumentService {
         DocumentEventBus documentEventBus,
         SearchService searchService,
         FolderService folderService,
-        com.edrms.backend.folders.FolderNumberingService numbering
+        com.edrms.backend.folders.FolderNumberingService numbering,
+        RecycleBinService recycleBin
     ) {
         this.documentRepository = documentRepository;
         this.versionRepository = versionRepository;
@@ -82,6 +84,7 @@ public class DocumentService {
         this.searchService = searchService;
         this.folderService = folderService;
         this.numbering = numbering;
+        this.recycleBin = recycleBin;
     }
 
     public Page<Document> getDocumentsInFolder(UUID folderId, Pageable pageable) {
@@ -444,10 +447,6 @@ public class DocumentService {
 
     @Transactional
     public void deleteDocument(UUID id) {
-        documentRepository.findById(id).ifPresent(d -> {
-            d.setIsDeleted(true);
-            documentRepository.save(d);
-            searchService.deleteDocumentIndex(id);
-        });
+        recycleBin.move(id);
     }
 }

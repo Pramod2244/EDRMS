@@ -106,7 +106,7 @@ public class DocumentPipelineWorker {
         job = jobRepository.save(job);
 
         Document doc = documentRepository.findById(docId).orElse(null);
-        if (doc == null) {
+        if (doc == null || doc.getPurgedAt()!=null) {
             log.error("Document not found for pipeline processing: {}", docId);
             job.setStatus("FAILED");
             job.setErrorMessage("Document not found in repository");

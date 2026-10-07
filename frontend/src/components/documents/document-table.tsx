@@ -64,6 +64,7 @@ export default function DocumentTable({
 
   // Custom Alert confirmation state for document deletion
   const [docToDelete, setDocToDelete] = useState<DocumentItem | null>(null);
+  const [deleteBusy,setDeleteBusy]=useState(false);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
@@ -719,25 +720,27 @@ export default function DocumentTable({
         isOpen={!!docToDelete}
         onClose={() => setDocToDelete(null)}
         title="Delete Document"
+        isProcessing={deleteBusy}
         variant="danger"
         message={
           docToDelete ? (
             <span>
-              Are you sure you want to permanently delete{" "}
+              Move{" "}
               <strong className="text-slate-900 font-semibold underline decoration-rose-400 underline-offset-2">
                 {docToDelete.name}
               </strong>
-              ? This action will remove all indexed content, pages, and versions.
+              to Recycle Bin? You can restore it during the configured recovery period.
             </span>
           ) : undefined
         }
-        confirmText="Delete Document"
+        confirmText="Move to Recycle Bin"
         cancelText="Cancel"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (docToDelete) {
-            deleteDocument(docToDelete.id);
-            showNotification(`Deleted "${docToDelete.name}"`);
-            setDocToDelete(null);
+            setDeleteBusy(true);
+            try {await deleteDocument(docToDelete.id);showNotification(`Moved "${docToDelete.name}" to Recycle Bin`);setDocToDelete(null);}
+            catch(cause){showNotification(cause instanceof Error?cause.message:"Unable to move document to Recycle Bin");}
+            finally{setDeleteBusy(false);}
           }
         }}
       />

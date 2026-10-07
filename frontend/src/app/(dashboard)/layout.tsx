@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Folder,
+  Trash2,
   Search,
   ShieldAlert,
   Sliders,
@@ -170,6 +171,9 @@ export default function DashboardLayout({
       allowedRoles: ["SUPER_ADMIN", "DEPARTMENT_MANAGER", "CONTRIBUTOR", "AUDITOR", "VIEWER"],
     },
     {
+      name: "Recycle Bin", href: "/recycle-bin", icon: Trash2, allowedRoles: ["SUPER_ADMIN"],
+    },
+    {
       name: "Audit Logs",
       href: "/audit",
       icon: ShieldAlert,
@@ -185,6 +189,7 @@ export default function DashboardLayout({
 
   const currentRole = activeUser.role;
   const navLinks = allNavLinks.filter((link) => {
+    if(link.href==="/recycle-bin")return currentRole==="SUPER_ADMIN" || (activeUser.permissions?.includes("DELETE") && activeUser.accessibleMenus?.includes("/documents"));
     if (activeUser.accessibleMenus && activeUser.accessibleMenus.length > 0) {
       return activeUser.accessibleMenus.includes(link.href);
     }
@@ -267,6 +272,7 @@ export default function DashboardLayout({
                   ? "Repository Files"
                   : pathname === "/search"
                     ? "Full-Text Search"
+                    : pathname === "/recycle-bin" ? "Recycle Bin"
                     : pathname === "/audit"
                       ? "Compliance Audit Trail"
                       : pathname === "/admin"

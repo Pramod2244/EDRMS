@@ -34,6 +34,7 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { useAuthStore, DEFAULT_ADMIN_USER } from "@/stores/auth-store";
 import RoleManager from "@/components/admin/role-manager";
+import ApplicationSettings from "@/components/admin/application-settings";
 import CreateUserModal, { EditableUser } from "@/components/admin/create-user-modal";
 import DataTablePagination from "@/components/common/data-table-pagination";
 import { CustomAlertDialog, AlertVariant } from "@/components/common/custom-alert-dialog";
@@ -64,7 +65,7 @@ export default function AdminPage() {
   const { activeStorageProvider, activeOcrEngine, setStorageProvider, setOcrEngine, folders, fetchFolders } =
     useDocumentStore();
 
-  const [activeTab, setActiveTab] = useState<"users" | "roles" | "nas" | "system">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "roles" | "nas" | "system" | "application">("users");
 
   // Storage / OCR settings state
   const [selectedProvider, setSelectedProvider] = useState<"LOCAL" | "NAS" | "S3">(activeStorageProvider);
@@ -511,6 +512,7 @@ export default function AdminPage() {
 
         {/* Tab Switcher */}
         <div className="flex flex-wrap items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
+          <button onClick={()=>setActiveTab("application")} className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${activeTab==="application"?"bg-orange-500 text-white":"text-slate-600 hover:bg-slate-50"}`}>Application Configuration</button>
           <button
             onClick={() => setActiveTab("users")}
             className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${activeTab === "users"
@@ -548,6 +550,7 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {activeTab === "application" && <ApplicationSettings/>}
       {activeTab === "roles" && <RoleManager />}
       {/* TAB 1: USER MANAGEMENT & ACCESS CONTROL */}
       {activeTab === "users" && (

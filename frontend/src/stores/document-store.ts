@@ -380,11 +380,9 @@ export const useDocumentStore = create<DocumentStoreState>()(
       },
 
       deleteDocument: async (documentId: string) => {
-        try {
-          await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
-        } catch (err) {
-          console.warn("Backend delete doc error:", err);
-        }
+        const token=useAuthStore.getState().token || localStorage.getItem("edrms_access_token");
+        const response=await fetch(`/api/documents/${documentId}`, { method: "DELETE",headers:token?{Authorization:`Bearer ${token}`}:{},signal:AbortSignal.timeout(15000) });
+        if(!response.ok)throw new Error((await response.json()).message || "Unable to move document to Recycle Bin");
         set((state) => ({
           documents: state.documents.filter((d) => d.id !== documentId),
         }));
