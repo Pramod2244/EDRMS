@@ -160,6 +160,8 @@ export default function AdminPage() {
     fetchFolders();
     fetchUsers();
     fetchStorageConfig();
+    console.log("HG");
+
   }, [fetchFolders]);
 
   const handleDeleteUser = (username: string) => {
@@ -510,22 +512,20 @@ export default function AdminPage() {
         <div className="flex items-center space-x-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
           <button
             onClick={() => setActiveTab("users")}
-            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-              activeTab === "users"
+            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${activeTab === "users"
                 ? "bg-orange-500 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
+              }`}
           >
             <Users className="h-3.5 w-3.5" />
             <span>User Accounts &amp; Governance</span>
           </button>
           <button
             onClick={() => setActiveTab("nas")}
-            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-              activeTab === "nas"
+            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${activeTab === "nas"
                 ? "bg-orange-500 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
+              }`}
           >
             <Database className="h-3.5 w-3.5" />
             <span>External NAS Box Setup</span>
@@ -535,11 +535,10 @@ export default function AdminPage() {
           </button>
           <button
             onClick={() => setActiveTab("system")}
-            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-              activeTab === "system"
+            className={`inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${activeTab === "system"
                 ? "bg-orange-500 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
+              }`}
           >
             <HardDrive className="h-3.5 w-3.5" />
             <span>Server Disk / S3 Cloud</span>
@@ -642,17 +641,16 @@ export default function AdminPage() {
                           {/* Role */}
                           <td className="px-6 py-3.5">
                             <span
-                              className={`inline-block font-semibold px-2.5 py-0.5 rounded-full border text-[11px] ${
-                                u.role === "SUPER_ADMIN"
+                              className={`inline-block font-semibold px-2.5 py-0.5 rounded-full border text-[11px] ${u.role === "SUPER_ADMIN"
                                   ? "bg-purple-50 text-purple-700 border-purple-200"
                                   : u.role === "DEPARTMENT_MANAGER"
-                                  ? "bg-blue-50 text-blue-700 border-blue-200"
-                                  : u.role === "AUDITOR"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : u.role === "CONTRIBUTOR"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-slate-50 text-slate-700 border-slate-200"
-                              }`}
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : u.role === "AUDITOR"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : u.role === "CONTRIBUTOR"
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : "bg-slate-50 text-slate-700 border-slate-200"
+                                }`}
                             >
                               {u.role}
                             </span>
@@ -796,11 +794,10 @@ export default function AdminPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-3">
                 <div
-                  className={`p-2.5 rounded-xl ${
-                    activeStorageProvider === "NAS"
+                  className={`p-2.5 rounded-xl ${activeStorageProvider === "NAS"
                       ? "bg-emerald-100 text-emerald-700"
                       : "bg-amber-100 text-amber-700"
-                  }`}
+                    }`}
                 >
                   <Database className="h-6 w-6" />
                 </div>
@@ -969,11 +966,10 @@ export default function AdminPage() {
             {/* Benchmark Diagnostics Display */}
             {testResult && (
               <div
-                className={`p-4 rounded-xl border text-xs space-y-2 animate-in fade-in ${
-                  testResult.success
+                className={`p-4 rounded-xl border text-xs space-y-2 animate-in fade-in ${testResult.success
                     ? "bg-emerald-50/80 border-emerald-200 text-emerald-900"
                     : "bg-rose-50/80 border-rose-200 text-rose-900"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2 font-bold">
                   {testResult.success ? (
@@ -1078,11 +1074,10 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
               <div
                 onClick={() => setSelectedProvider("LOCAL")}
-                className={`cursor-pointer border rounded-xl p-4 transition-all ${
-                  selectedProvider === "LOCAL"
+                className={`cursor-pointer border rounded-xl p-4 transition-all ${selectedProvider === "LOCAL"
                     ? "border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2.5 font-bold text-sm text-slate-900">
                   <HardDrive className={`h-4 w-4 ${selectedProvider === "LOCAL" ? "text-orange-600" : "text-slate-400"}`} />
@@ -1095,11 +1090,10 @@ export default function AdminPage() {
 
               <div
                 onClick={() => setSelectedProvider("NAS")}
-                className={`cursor-pointer border rounded-xl p-4 transition-all ${
-                  selectedProvider === "NAS"
+                className={`cursor-pointer border rounded-xl p-4 transition-all ${selectedProvider === "NAS"
                     ? "border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2.5 font-bold text-sm text-slate-900">
                   <Database className={`h-4 w-4 ${selectedProvider === "NAS" ? "text-orange-600" : "text-slate-400"}`} />
@@ -1112,11 +1106,10 @@ export default function AdminPage() {
 
               <div
                 onClick={() => setSelectedProvider("S3")}
-                className={`cursor-pointer border rounded-xl p-4 transition-all ${
-                  selectedProvider === "S3"
+                className={`cursor-pointer border rounded-xl p-4 transition-all ${selectedProvider === "S3"
                     ? "border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2.5 font-bold text-sm text-slate-900">
                   <Cloud className={`h-4 w-4 ${selectedProvider === "S3" ? "text-orange-600" : "text-slate-400"}`} />
@@ -1307,11 +1300,10 @@ export default function AdminPage() {
             {/* Test Results Banner */}
             {testResult && (
               <div
-                className={`p-3 rounded-xl border text-xs flex items-center space-x-2.5 animate-in fade-in ${
-                  testResult.success
+                className={`p-3 rounded-xl border text-xs flex items-center space-x-2.5 animate-in fade-in ${testResult.success
                     ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                     : "bg-rose-50 border-rose-200 text-rose-800"
-                }`}
+                  }`}
               >
                 {testResult.success ? (
                   <Check className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -1344,11 +1336,10 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
               <div
                 onClick={() => setSelectedOcr("LOCAL_TESSERACT")}
-                className={`cursor-pointer border rounded-xl p-4 transition-all ${
-                  selectedOcr === "LOCAL_TESSERACT"
+                className={`cursor-pointer border rounded-xl p-4 transition-all ${selectedOcr === "LOCAL_TESSERACT"
                     ? "border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2.5 font-bold text-sm text-slate-900">
                   <Cpu className="h-4 w-4 text-orange-600" />
@@ -1361,11 +1352,10 @@ export default function AdminPage() {
 
               <div
                 onClick={() => setSelectedOcr("TIKA_ONLY")}
-                className={`cursor-pointer border rounded-xl p-4 transition-all ${
-                  selectedOcr === "TIKA_ONLY"
+                className={`cursor-pointer border rounded-xl p-4 transition-all ${selectedOcr === "TIKA_ONLY"
                     ? "border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-2.5 font-bold text-sm text-slate-900">
                   <Cpu className="h-4 w-4 text-slate-400" />
