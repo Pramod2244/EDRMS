@@ -31,6 +31,9 @@ public class Document {
     @Column(nullable = false, length = 255)
     private String name;
 
+    @Column(name = "reference_id", length = 100, updatable = false)
+    private String referenceId;
+
     @Column(name = "mime_type", nullable = false, length = 150)
     private String mimeType;
 

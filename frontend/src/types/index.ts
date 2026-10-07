@@ -21,6 +21,7 @@ export interface Folder {
 }
 
 export interface DocumentItem {
+  referenceId?: string;
   id: string;
   folderId: string | null;
   name: string;

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PermissionType } from "@/types";
 
-export type UserRole = "SUPER_ADMIN" | "DEPARTMENT_MANAGER" | "CONTRIBUTOR" | "VIEWER" | "AUDITOR";
+export type UserRole = "SUPER_ADMIN" | "DEPARTMENT_MANAGER" | "CONTRIBUTOR" | "VIEWER" | "AUDITOR" | (string & {});
 
 export interface AuthUser {
   id: string;

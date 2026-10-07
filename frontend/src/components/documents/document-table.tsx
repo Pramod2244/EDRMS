@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { DocumentItem } from "@/types";
 import { formatBytes } from "@/lib/utils";
-import PdfPageViewer from "./pdf-page-viewer";
+import dynamic from "next/dynamic";
+const PdfPageViewer = dynamic(() => import("./pdf-page-viewer"), { ssr: false });
 import TemporaryShareModal from "../permissions/temporary-share-modal";
 import { useDocumentStore, FolderNode } from "@/stores/document-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -197,6 +198,7 @@ export default function DocumentTable({
     const term = searchTerm.toLowerCase().trim();
     return (
       doc.name.toLowerCase().includes(term) ||
+      (doc.referenceId || "").toLowerCase().includes(term) ||
       (doc.extension && doc.extension.toLowerCase().includes(term)) ||
       (doc.status && doc.status.toLowerCase().includes(term))
     );
@@ -549,6 +551,7 @@ export default function DocumentTable({
                               </span>
                             )}
 
+                            {doc.referenceId && <span className="text-[10px] font-mono text-orange-700 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded break-all" title="Document ID">{doc.referenceId}</span>}
                             {/* Subfolder Badge */}
                             {isFromSubfolder && docFolderName && (
                               <button

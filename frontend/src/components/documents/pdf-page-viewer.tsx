@@ -335,10 +335,7 @@ export default function PdfPageViewer({
                 ref={isActive ? activeSidebarCardRef : null}
                 onClick={() => {
                   setCurrentPage(pageNum);
-                  const el = window.document.getElementById(`viewer-pdf-page-${pageNum}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }
+
                 }}
                 className={`group relative rounded-xl border p-2.5 transition-all cursor-pointer ${
                   isActive
@@ -410,7 +407,7 @@ export default function PdfPageViewer({
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
       <div className="w-full h-full max-w-7xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
         {/* Top Navigation & Controls Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
           {/* File Meta */}
           <div className="flex items-center space-x-3 overflow-hidden mr-4">
             <div className="p-2 rounded-xl bg-orange-100 text-orange-600 shrink-0">
@@ -439,7 +436,7 @@ export default function PdfPageViewer({
           </div>
 
           {/* Controls & View Tabs */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             {/* Pages Sidebar Toggle Button */}
             <button
               type="button"
@@ -546,8 +543,7 @@ export default function PdfPageViewer({
                   onClick={() => {
                     const prev = Math.max(1, currentPage - 1);
                     setCurrentPage(prev);
-                    const el = window.document.getElementById(`viewer-pdf-page-${prev}`);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+
                   }}
                   className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
                   title="Previous Page"
@@ -562,8 +558,7 @@ export default function PdfPageViewer({
                   onClick={() => {
                     const next = Math.min(totalPages, currentPage + 1);
                     setCurrentPage(next);
-                    const el = window.document.getElementById(`viewer-pdf-page-${next}`);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+
                   }}
                   className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
                   title="Next Page"
@@ -629,6 +624,7 @@ export default function PdfPageViewer({
 
             {/* Close Button */}
             <button
+              aria-label="Close preview"
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-slate-200/60 text-slate-400 hover:text-slate-800 transition ml-1"
             >
@@ -638,7 +634,7 @@ export default function PdfPageViewer({
         </div>
 
         {/* Viewer Main Viewport Layout (with Pages sidebar on Left or Right) */}
-        <div className="flex-1 bg-slate-100 overflow-hidden relative flex flex-row">
+        <div className="flex-1 min-h-0 bg-slate-100 overflow-hidden relative flex flex-row">
           {/* Pages Sidebar (renders on left or right according to sidebarPosition) */}
           {renderPagesSidebar()}
 

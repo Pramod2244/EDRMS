@@ -493,7 +493,7 @@ export default function DashboardLayout({
 
         {/* Main Content Body */}
         <main className="flex-1 min-h-0 overflow-hidden px-6 py-5 lg:px-8 lg:py-6 bg-slate-50 flex flex-col justify-between">
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
             {isCurrentRouteAllowed ? (
               children
             ) : (

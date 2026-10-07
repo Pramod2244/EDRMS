@@ -68,6 +68,8 @@ edrms:
     active-provider: ${STORAGE_ACTIVE_PROVIDER:LOCAL}
     local:
       root-path: ${STORAGE_LOCAL_ROOT_PATH:./data/storage}
+    nas:
+      root-path: ${STORAGE_NAS_ROOT_PATH:./data/nas_storage}
     s3:
       region: ${AWS_REGION:us-east-1}
       bucket-name: ${AWS_S3_BUCKET_NAME:edrms-documents-bucket}

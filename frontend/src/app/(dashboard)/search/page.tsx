@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search as SearchIcon,
@@ -22,69 +22,72 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
 
-  const { documents, fetchDocuments, fetchFolders } = useDocumentStore();
+  const documents = useDocumentStore((state) => state.documents);
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchHit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [activePreviewHit, setActivePreviewHit] = useState<{ docId: string; page: number } | null>(null);
 
-  // Load documents and folders on mount if not already loaded
-  useEffect(() => {
-    fetchDocuments();
-    fetchFolders();
-  }, [fetchDocuments, fetchFolders]);
+  const searchController = useRef<AbortController | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState("");
 
-  // Search execution function
   const executeSearch = useCallback(async (searchTerm: string) => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    searchController.current?.abort();
     const cleanTerm = searchTerm.trim();
     if (!cleanTerm) {
       setResults([]);
+      setIsSearching(false);
+      setSearchedQuery("");
       return;
     }
+    const controller = new AbortController();
+    searchController.current = controller;
     setIsSearching(true);
-
+    setSearchError(null);
     try {
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: cleanTerm }),
+        signal: controller.signal,
       });
-      if (res.ok) {
-        const data: SearchHit[] = await res.json();
-        setResults(data);
-      } else {
+      if (!res.ok) throw new Error("Search is unavailable. Please try again.");
+      const data: SearchHit[] = await res.json();
+      if (!controller.signal.aborted) {
+        setResults(data.map((hit) => ({ ...hit, pageHits: [...hit.pageHits].sort((a, b) => a.pageNumber - b.pageNumber) })));
+        setSearchedQuery(cleanTerm);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setSearchError(error instanceof Error ? error.message : "Search failed");
         setResults([]);
       }
-    } catch (err) {
-      console.error("Search failed:", err);
-      setResults([]);
     } finally {
-      setIsSearching(false);
+      if (!controller.signal.aborted) setIsSearching(false);
     }
   }, []);
 
-  // Run search when initialQuery from URL changes
-  useEffect(() => {
-    if (initialQuery) {
-      setQuery(initialQuery);
-      executeSearch(initialQuery);
-    }
-  }, [initialQuery, executeSearch]);
+  useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
 
-  // Debounced auto-search when user types
   useEffect(() => {
+    searchController.current?.abort();
+    setIsSearching(false);
+    setSearchError(null);
     if (!query.trim()) {
       setResults([]);
+      setSearchedQuery("");
       return;
     }
-    const timer = setTimeout(() => {
-      executeSearch(query);
-    }, 280);
-
-    return () => clearTimeout(timer);
+    debounceTimer.current = setTimeout(() => executeSearch(query), 350);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      searchController.current?.abort();
+    };
   }, [query, executeSearch]);
-
   // Form submit handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +97,6 @@ function SearchContent() {
   // Quick suggestion click handler
   const handleSuggestionClick = (term: string) => {
     setQuery(term);
-    executeSearch(term);
   };
 
   // Filter results by selected category
@@ -127,7 +129,7 @@ function SearchContent() {
         currentVersion: 1,
         status: "INDEXED",
         storageProvider: "LOCAL",
-        pageCount: results.find((r) => r.documentId === activePreviewHit.docId)?.pageHits.length || 1,
+        pageCount: results.find((r) => r.documentId === activePreviewHit.docId)?.pageHits.reduce((max, page) => Math.max(max, page.pageNumber), 1) || 1,
         createdAt: "Active",
         fileUrl: `/api/documents/${activePreviewHit.docId}/preview`,
       }
@@ -136,7 +138,7 @@ function SearchContent() {
   const quickPills = ["file-example", "Lorem", "invoice", "contract", "PDF", "Arkaa"];
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 w-full">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -145,7 +147,7 @@ function SearchContent() {
               Full-Text &amp; OCR Content Search
             </h1>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
-              OpenSearch &bull; Tesseract OCR
+              Content search
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -243,23 +245,24 @@ function SearchContent() {
       </form>
 
       {/* Results Header / Feedback */}
-      {query.trim() && !isSearching && (
+      {searchedQuery && !isSearching && !searchError && (
         <div className="flex items-center justify-between text-xs text-slate-500 px-1 border-b border-slate-200 pb-2">
           <span>
             Found <strong className="text-slate-900 font-semibold">{filteredResults.length}</strong> matching{" "}
             {filteredResults.length === 1 ? "document" : "documents"} with{" "}
             <strong className="text-slate-900 font-semibold">{totalHitsCount}</strong> page occurrences for &quot;
-            <strong className="text-orange-600">{query}</strong>&quot;
+            <strong className="text-orange-600">{searchedQuery}</strong>&quot;
           </span>
           {filteredResults.length > 0 && (
-            <span className="text-[11px] text-slate-400 font-mono">Real-time OpenSearch Ranking</span>
+            <span className="text-[11px] text-slate-400 font-mono">Matching pages</span>
           )}
         </div>
       )}
 
       {/* Results List */}
-      <div className="space-y-4">
-        {filteredResults.length === 0 && !isSearching && query.trim() && (
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4 pr-3 pb-4" style={{ scrollbarGutter: "stable" }} aria-label="Search results">
+        {searchError && <p role="alert" className="rounded-lg bg-rose-50 p-4 text-sm text-rose-700">{searchError}</p>}
+        {filteredResults.length === 0 && !isSearching && !searchError && searchedQuery && (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 space-y-3">
             <p className="font-semibold text-slate-700">
               No matching documents or OCR hits found for &quot;{query}&quot;.

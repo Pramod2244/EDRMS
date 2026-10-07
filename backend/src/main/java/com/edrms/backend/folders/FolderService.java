@@ -12,9 +12,11 @@ import java.util.UUID;
 public class FolderService {
 
     private final FolderRepository folderRepository;
+    private final FolderNumberingService numbering;
 
-    public FolderService(FolderRepository folderRepository) {
+    public FolderService(FolderRepository folderRepository, FolderNumberingService numbering) {
         this.folderRepository = folderRepository;
+        this.numbering = numbering;
     }
 
     public List<Folder> getAllFolders() {
@@ -54,7 +56,9 @@ public class FolderService {
             .isDeleted(false)
             .build();
 
-        return folderRepository.save(folder);
+        Folder saved=folderRepository.saveAndFlush(folder);
+        numbering.initialize(saved.getId());
+        return saved;
     }
 
     @Transactional

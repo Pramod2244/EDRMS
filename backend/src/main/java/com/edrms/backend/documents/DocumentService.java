@@ -54,6 +54,7 @@ public class DocumentService {
     private final DocumentEventBus documentEventBus;
     private final SearchService searchService;
     private final FolderService folderService;
+    private final com.edrms.backend.folders.FolderNumberingService numbering;
 
     public DocumentService(
         DocumentRepository documentRepository,
@@ -66,7 +67,8 @@ public class DocumentService {
         StorageService storageService,
         DocumentEventBus documentEventBus,
         SearchService searchService,
-        FolderService folderService
+        FolderService folderService,
+        com.edrms.backend.folders.FolderNumberingService numbering
     ) {
         this.documentRepository = documentRepository;
         this.versionRepository = versionRepository;
@@ -79,6 +81,7 @@ public class DocumentService {
         this.documentEventBus = documentEventBus;
         this.searchService = searchService;
         this.folderService = folderService;
+        this.numbering = numbering;
     }
 
     public Page<Document> getDocumentsInFolder(UUID folderId, Pageable pageable) {
@@ -130,6 +133,7 @@ public class DocumentService {
             .pageCount(initialPageCount)
             .folderId(folderId)
             .name(valResult.getSanitizedFilename())
+            .referenceId(numbering.allocate(folderId))
             .mimeType(valResult.getDetectedMimeType())
             .extension(valResult.getExtension())
             .fileSizeBytes(valResult.getSizeBytes())
@@ -281,7 +285,7 @@ public class DocumentService {
                         .contentLength((long) thumbBytes.length)
                         .contentType("image/png")
                         .build();
-                    storageService.getActiveProvider().store(thumbKey, new ByteArrayInputStream(thumbBytes), meta);
+                    storageService.getProvider(providerType).store(thumbKey, new ByteArrayInputStream(thumbBytes), meta);
 
                     if (page.isPresent()) {
                         DocumentPage p = page.get();
@@ -373,7 +377,7 @@ public class DocumentService {
                 .contentLength((long) updatedPdfBytes.length)
                 .contentType("application/pdf")
                 .build();
-            storageService.getActiveProvider().store(doc.getStorageKey(), new ByteArrayInputStream(updatedPdfBytes), metadata);
+            storageService.getProvider(providerType).store(doc.getStorageKey(), new ByteArrayInputStream(updatedPdfBytes), metadata);
 
             // Update document metadata
             doc.setFileSizeBytes((long) updatedPdfBytes.length);
@@ -384,7 +388,7 @@ public class DocumentService {
             // Update PREVIEW_PDF asset if present
             Optional<DocumentAsset> previewAsset = assetRepository.findByDocumentIdAndAssetType(doc.getId(), "PREVIEW_PDF");
             if (previewAsset.isPresent()) {
-                storageService.getActiveProvider().store(previewAsset.get().getStorageKey(), new ByteArrayInputStream(updatedPdfBytes), metadata);
+                storageService.getProvider(providerType).store(previewAsset.get().getStorageKey(), new ByteArrayInputStream(updatedPdfBytes), metadata);
             }
 
             // Delete target page record from database
@@ -418,7 +422,7 @@ public class DocumentService {
                     .contentLength((long) thumbBytes.length)
                     .contentType("image/png")
                     .build();
-                storageService.getActiveProvider().store(thumbKey, new ByteArrayInputStream(thumbBytes), thumbMeta);
+                storageService.getProvider(providerType).store(thumbKey, new ByteArrayInputStream(thumbBytes), thumbMeta);
 
                 if (!remainingPages.isEmpty()) {
                     DocumentPage p1 = remainingPages.get(0);

@@ -27,6 +27,7 @@ public class AuthController {
     private final JwtTokenService jwtTokenService;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final com.edrms.backend.roles.RoleCatalogService roleCatalog;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:http://localhost:8080/realms/edrms}")
     private String keycloakIssuerUri;
@@ -34,11 +35,13 @@ public class AuthController {
     public AuthController(
         JwtTokenService jwtTokenService,
         UserRepository userRepository,
-        AuditService auditService
+        AuditService auditService,
+        com.edrms.backend.roles.RoleCatalogService roleCatalog
     ) {
         this.jwtTokenService = jwtTokenService;
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.roleCatalog = roleCatalog;
     }
 
     private String resolveIp(HttpServletRequest req) {
@@ -60,6 +63,8 @@ public class AuthController {
 
     private List<String> defaultPermissionsForRole(String role) {
         if (role == null) return List.of("VIEW");
+        var saved = roleCatalog.find(role);
+        if (saved.isPresent()) return com.edrms.backend.roles.RoleCatalogService.split(saved.get().getPermissionsCsv());
         return switch (role.toUpperCase()) {
             case "SUPER_ADMIN" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS", "AUDIT_READ");
             case "DEPARTMENT_MANAGER" -> List.of("VIEW", "UPLOAD", "DOWNLOAD", "DELETE", "SHARE", "PRINT", "MANAGE_PERMISSIONS");
@@ -71,6 +76,8 @@ public class AuthController {
 
     private List<String> defaultMenusForRole(String role) {
         if (role == null) return List.of("/documents", "/search");
+        var saved = roleCatalog.find(role);
+        if (saved.isPresent()) return com.edrms.backend.roles.RoleCatalogService.split(saved.get().getMenusCsv());
         return switch (role.toUpperCase()) {
             case "SUPER_ADMIN" -> List.of("/documents", "/search", "/audit", "/admin");
             case "DEPARTMENT_MANAGER", "AUDITOR" -> List.of("/documents", "/search", "/audit");

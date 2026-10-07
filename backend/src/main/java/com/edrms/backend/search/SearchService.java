@@ -32,6 +32,7 @@ public class SearchService {
     private final DocumentRepository documentRepository;
     private final DocumentPageRepository pageRepository;
     private final FolderRepository folderRepository;
+    private volatile long searchRetryAfterMs;
 
     public SearchService(
         OpenSearchClient openSearchClient,
@@ -110,6 +111,10 @@ public class SearchService {
         }
         String cleanQuery = queryText.trim();
 
+        if (System.currentTimeMillis() < searchRetryAfterMs) {
+            return searchFallback(cleanQuery, query.getFolderId());
+        }
+
         try {
             SearchResponse<Map> response = openSearchClient.search(s -> s
                 .index(indexName)
@@ -161,12 +166,17 @@ public class SearchService {
 
             Map<UUID, DocumentSearchHit> hitMap = new LinkedHashMap<>();
 
+            List<UUID> matchedIds = response.hits().hits().stream()
+                .filter(hit -> hit.source() != null)
+                .map(hit -> UUID.fromString((String) hit.source().get("document_id"))).distinct().toList();
+            Map<UUID, Document> matchedDocuments = documentRepository.findAllById(matchedIds).stream()
+                .collect(Collectors.toMap(Document::getId, d -> d));
             for (Hit<Map> hit : response.hits().hits()) {
                 Map<String, Object> source = hit.source();
                 if (source == null) continue;
 
                 UUID docId = UUID.fromString((String) source.get("document_id"));
-                Optional<Document> docOpt = documentRepository.findById(docId);
+                Optional<Document> docOpt = Optional.ofNullable(matchedDocuments.get(docId));
                 if (docOpt.isEmpty() || Boolean.TRUE.equals(docOpt.get().getIsDeleted())) {
                     continue;
                 }
@@ -220,6 +230,7 @@ public class SearchService {
                 return new ArrayList<>(hitMap.values());
             }
         } catch (Exception e) {
+            searchRetryAfterMs = System.currentTimeMillis() + 30000;
             log.warn("OpenSearch query error, falling back to database query: {}", e.getMessage());
         }
 
@@ -232,9 +243,12 @@ public class SearchService {
 
         // 1. Text content search
         List<DocumentPage> matchedPages = pageRepository.findByTextContentContainingIgnoreCase(queryText);
+        Map<UUID, Document> matchedDocuments = documentRepository.findAllById(
+            matchedPages.stream().map(DocumentPage::getDocumentId).distinct().toList()).stream()
+            .collect(Collectors.toMap(Document::getId, d -> d));
         for (DocumentPage page : matchedPages) {
             UUID docId = page.getDocumentId();
-            Document doc = documentRepository.findById(docId).orElse(null);
+            Document doc = matchedDocuments.get(docId);
             if (doc == null || Boolean.TRUE.equals(doc.getIsDeleted())) continue;
             if (folderId != null && !doc.getFolderId().equals(folderId)) continue;
 
@@ -243,10 +257,17 @@ public class SearchService {
 
         // 2. Document name search
         List<Document> matchedDocs = documentRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(queryText);
+        List<UUID> nameOnlyIds = matchedDocs.stream()
+            .filter(doc -> !hitMap.containsKey(doc.getId()))
+            .filter(doc -> folderId == null || folderId.equals(doc.getFolderId()))
+            .map(Document::getId).toList();
+        Map<UUID, List<DocumentPage>> namePages = nameOnlyIds.isEmpty() ? Map.of() :
+            pageRepository.findByDocumentIdInOrderByDocumentIdAscPageNumberAsc(nameOnlyIds).stream()
+                .collect(Collectors.groupingBy(DocumentPage::getDocumentId));
         for (Document doc : matchedDocs) {
             if (folderId != null && !doc.getFolderId().equals(folderId)) continue;
             if (!hitMap.containsKey(doc.getId())) {
-                List<DocumentPage> pages = pageRepository.findByDocumentIdOrderByPageNumberAsc(doc.getId());
+                List<DocumentPage> pages = namePages.getOrDefault(doc.getId(), List.of());
                 if (!pages.isEmpty()) {
                     for (DocumentPage p : pages) {
                         addHitToMap(hitMap, doc, p.getPageNumber(), p.getTextContent(), queryText, 1.0);

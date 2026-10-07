@@ -48,6 +48,8 @@ export default function ScrollablePdfViewer({
   // Load PDF Document via pdfjs-dist
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    let loadingTask: any = null;
     setIsLoading(true);
     setLoadError(null);
     setPdfDoc(null);
@@ -64,7 +66,7 @@ export default function ScrollablePdfViewer({
         if (file) {
           data = await file.arrayBuffer();
         } else if (url) {
-          const res = await fetch(url);
+          const res = await fetch(url, { signal: controller.signal });
           if (!res.ok) throw new Error(`Failed to load PDF (HTTP ${res.status})`);
           data = await res.arrayBuffer();
         } else {
@@ -73,7 +75,7 @@ export default function ScrollablePdfViewer({
 
         if (cancelled) return;
 
-        const loadingTask = pdfjs.getDocument({
+        loadingTask = pdfjs.getDocument({
           data,
           cMapUrl: "/cmaps/",
           cMapPacked: true,
@@ -102,6 +104,8 @@ export default function ScrollablePdfViewer({
 
     return () => {
       cancelled = true;
+      controller.abort();
+      loadingTask?.destroy();
     };
   }, [file, url]);
 
@@ -154,9 +158,12 @@ export default function ScrollablePdfViewer({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener("scroll", handleScroll, { passive: true });
+    let frame = 0;
+    const scheduleScroll = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; handleScroll(); }); };
+    el.addEventListener("scroll", scheduleScroll, { passive: true });
     return () => {
-      el.removeEventListener("scroll", handleScroll);
+      el.removeEventListener("scroll", scheduleScroll);
+      cancelAnimationFrame(frame);
     };
   }, [handleScroll]);
 
@@ -218,15 +225,15 @@ export default function ScrollablePdfViewer({
   return (
     <div
       ref={containerRef}
-      onScroll={handleScroll}
       className={`w-full h-full overflow-y-auto overflow-x-auto p-4 flex flex-col items-center space-y-6 bg-slate-100 select-none ${className}`}
     >
       {Array.from({ length: totalPages }, (_, idx) => {
         const pageNum = idx + 1;
         return (
           <PdfSinglePage
-            key={`page-${pageNum}-${zoom}-${fitMode}`}
+            key={`page-${pageNum}`}
             pdfDoc={pdfDoc}
+            scrollRoot={containerRef}
             pageNumber={pageNum}
             totalPages={totalPages}
             zoom={zoom}
@@ -242,6 +249,7 @@ export default function ScrollablePdfViewer({
 
 interface PdfSinglePageProps {
   pdfDoc: any;
+  scrollRoot: React.RefObject<HTMLDivElement>;
   pageNumber: number;
   totalPages: number;
   zoom: number;
@@ -252,6 +260,7 @@ interface PdfSinglePageProps {
 
 function PdfSinglePage({
   pdfDoc,
+  scrollRoot,
   pageNumber,
   totalPages,
   zoom,
@@ -260,6 +269,13 @@ function PdfSinglePage({
   isActive,
 }: PdfSinglePageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => setNearViewport(entry.isIntersecting), { root: scrollRoot.current, rootMargin: "600px 0px" });
+    if (pageRef.current) observer.observe(pageRef.current);
+    return () => observer.disconnect();
+  }, [scrollRoot]);
   const [isRendered, setIsRendered] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 600, height: 800 });
@@ -268,6 +284,13 @@ function PdfSinglePage({
     let renderTask: any = null;
     let cancelled = false;
 
+
+    setIsRendered(false);
+    setRenderError(null);
+    if (!nearViewport) {
+      if (canvasRef.current) { canvasRef.current.width = 0; canvasRef.current.height = 0; }
+      return;
+    }
     async function renderPage() {
       if (!pdfDoc || !canvasRef.current) return;
 
@@ -281,10 +304,10 @@ function PdfSinglePage({
         // Calculate scaling
         let scale = (zoom / 100) * 1.5; // High-DPI crisp scale
         if (fitMode === "width") {
-          const containerWidth = Math.min(window.innerWidth - 380, 850);
+          const containerWidth = Math.max(240, Math.min((scrollRoot.current?.clientWidth || 850) - 48, 1100));
           scale = (containerWidth / baseViewport.width) * (zoom / 100);
         } else if (fitMode === "page") {
-          const containerHeight = Math.min(window.innerHeight - 220, 750);
+          const containerHeight = Math.max(240, (scrollRoot.current?.clientHeight || 750) - 60);
           scale = (containerHeight / baseViewport.height) * (zoom / 100);
         }
 
@@ -321,17 +344,19 @@ function PdfSinglePage({
 
     return () => {
       cancelled = true;
+
       if (renderTask) {
         renderTask.cancel();
       }
     };
-  }, [pdfDoc, pageNumber, zoom, fitMode]);
+  }, [pdfDoc, pageNumber, zoom, fitMode, nearViewport, scrollRoot]);
 
   return (
     <div
+      ref={pageRef}
       id={`${pageIdPrefix}-${pageNumber}`}
       data-page-number={pageNumber}
-      className={`relative flex flex-col items-center transition-all duration-150 ${
+      className={`relative shrink-0 flex flex-col items-center ${
         isActive
           ? "ring-4 ring-orange-500/40 rounded-xl"
           : "hover:ring-2 hover:ring-slate-300 rounded-xl"

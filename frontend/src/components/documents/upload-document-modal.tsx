@@ -4,6 +4,7 @@ import React from "react";
 import { X, UploadCloud, Folder } from "lucide-react";
 import DocumentUploader from "./document-uploader";
 import { useDocumentStore } from "@/stores/document-store";
+import { NumberingPreview } from "@/components/folders/folder-numbering";
 
 interface UploadDocumentModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export default function UploadDocumentModal({
 
         {/* Modal Body: Document Uploader with 12-Stage Pipeline */}
         <div className="p-6 max-h-[80vh] overflow-y-auto">
+          <NumberingPreview folderId={folderId}/>
           <DocumentUploader
             folderId={folderId}
             onUploadComplete={() => {

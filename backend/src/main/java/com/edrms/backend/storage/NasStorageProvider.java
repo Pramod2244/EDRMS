@@ -27,22 +27,8 @@ public class NasStorageProvider implements StorageProvider {
         if (rootDir == null || rootDir.isBlank()) {
             rootDir = "./data/nas_storage";
         }
-        Path path = Paths.get(rootDir).toAbsolutePath().normalize();
-        if (!Files.exists(path) && rootDir.contains("/Volumes/NAS")) {
-            Path localNas = Paths.get("./data/nas_storage").toAbsolutePath().normalize();
-            try {
-                Files.createDirectories(localNas);
-                log.info("Configured NAS volume {} not mounted; falling back to local storage: {}", path, localNas);
-                path = localNas;
-            } catch (IOException ignored) {}
-        }
-        this.rootPath = path;
-        try {
-            Files.createDirectories(this.rootPath);
-            log.info("NAS Storage Provider initialized at path: {}", this.rootPath);
-        } catch (IOException e) {
-            log.warn("Could not create NAS storage directory at {} (will retry when mounted): {}", this.rootPath, e.getMessage());
-        }
+        this.rootPath = Paths.get(rootDir).toAbsolutePath().normalize();
+        log.info("NAS path configured at {}. The share must already be accessible to the backend service.", this.rootPath);
     }
 
     public String getRootPathString() {
@@ -52,12 +38,13 @@ public class NasStorageProvider implements StorageProvider {
     @Override
     public StorageResult store(String key, InputStream inputStream, StorageMetadata metadata) {
         Path targetPath = resolveAndValidate(key);
+        Path tempPath = null;
         try {
             if (targetPath.getParent() != null) {
                 Files.createDirectories(targetPath.getParent());
             }
 
-            Path tempPath = Files.createTempFile(targetPath.getParent(), "nas-upload-", ".tmp");
+            tempPath = Files.createTempFile(targetPath.getParent(), "nas-upload-", ".tmp");
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             long bytesWritten;
 
@@ -80,6 +67,11 @@ public class NasStorageProvider implements StorageProvider {
                 .build();
         } catch (Exception e) {
             throw new RuntimeException("Failed to store file in NAS storage key: " + key + " (path: " + targetPath + ")", e);
+        } finally {
+            if (tempPath != null) {
+                try { Files.deleteIfExists(tempPath); }
+                catch (IOException e) { log.warn("Could not clean up NAS upload temporary file: {}", tempPath); }
+            }
         }
     }
 
@@ -89,20 +81,6 @@ public class NasStorageProvider implements StorageProvider {
         while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
 
         Path targetPath = resolveAndValidate(cleanKey);
-        if (!Files.exists(targetPath)) {
-            // Check fallback locations
-            Path fallbackNas = Paths.get("./data/nas_storage").toAbsolutePath().normalize().resolve(cleanKey).normalize();
-            if (Files.exists(fallbackNas)) {
-                targetPath = fallbackNas;
-            } else {
-                Path fallbackLocal = Paths.get("./data/storage").toAbsolutePath().normalize().resolve(cleanKey).normalize();
-                if (Files.exists(fallbackLocal)) {
-                    targetPath = fallbackLocal;
-                } else {
-                    throw new RuntimeException("File not found in External NAS Box storage: " + key + " at path " + targetPath);
-                }
-            }
-        }
         try {
             return new BufferedInputStream(Files.newInputStream(targetPath));
         } catch (IOException e) {
@@ -124,9 +102,7 @@ public class NasStorageProvider implements StorageProvider {
     public boolean exists(String key) {
         String cleanKey = key;
         while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
-        if (Files.exists(resolveAndValidate(cleanKey))) return true;
-        if (Files.exists(Paths.get("./data/nas_storage").toAbsolutePath().normalize().resolve(cleanKey).normalize())) return true;
-        return Files.exists(Paths.get("./data/storage").toAbsolutePath().normalize().resolve(cleanKey).normalize());
+        return Files.exists(resolveAndValidate(cleanKey));
     }
 
     @Override
@@ -160,6 +136,10 @@ public class NasStorageProvider implements StorageProvider {
     }
 
     private Path resolveAndValidate(String key) {
+        if (!Files.isDirectory(this.rootPath)) {
+            throw new IllegalStateException("NAS share is unavailable. Mount or connect the configured share before accessing documents.");
+        }
+        if (key == null || key.isBlank()) throw new IllegalArgumentException("Storage key is required");
         String cleanKey = key;
         while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
         Path target = this.rootPath.resolve(cleanKey).normalize();

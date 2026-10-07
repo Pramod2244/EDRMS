@@ -1,0 +1,16 @@
+ALTER TABLE roles ADD COLUMN permissions_csv TEXT NOT NULL DEFAULT '';
+ALTER TABLE roles ADD COLUMN menus_csv TEXT NOT NULL DEFAULT '/documents,/search';
+UPDATE roles SET permissions_csv = CASE name
+ WHEN 'SUPER_ADMIN' THEN 'VIEW,UPLOAD,DOWNLOAD,DELETE,SHARE,PRINT,MANAGE_PERMISSIONS,AUDIT_READ'
+ WHEN 'DEPARTMENT_MANAGER' THEN 'VIEW,UPLOAD,DOWNLOAD,DELETE,SHARE,PRINT,MANAGE_PERMISSIONS'
+ WHEN 'CONTRIBUTOR' THEN 'VIEW,UPLOAD,DOWNLOAD,PRINT'
+ WHEN 'AUDITOR' THEN 'VIEW,AUDIT_READ' ELSE 'VIEW' END;
+UPDATE roles SET menus_csv = '/documents,/search,/audit,/admin' WHERE name='SUPER_ADMIN';
+UPDATE roles SET menus_csv = '/documents,/search,/audit' WHERE name IN ('DEPARTMENT_MANAGER','AUDITOR');
+CREATE TABLE mobile_capture_links (
+ id UUID PRIMARY KEY, token_hash VARCHAR(64) NOT NULL UNIQUE,
+ folder_id UUID NOT NULL REFERENCES folders(id), owner_id UUID NOT NULL REFERENCES users(id),
+ expires_at TIMESTAMPTZ NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+ document_id UUID REFERENCES documents(id)
+);
+CREATE INDEX idx_mobile_capture_expiry ON mobile_capture_links(expires_at);
