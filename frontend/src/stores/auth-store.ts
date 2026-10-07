@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PermissionType } from "@/types";
 
-export type UserRole = "SUPER_ADMIN" | "DEPARTMENT_MANAGER" | "CONTRIBUTOR" | "VIEWER" | "AUDITOR";
+export type UserRole = "SUPER_ADMIN" | "DEPARTMENT_MANAGER" | "CONTRIBUTOR" | "VIEWER" | "AUDITOR" | (string & {});
 
 export interface AuthUser {
   id: string;
@@ -63,9 +63,9 @@ export const rolePermissionsMap: Record<UserRole, PermissionType[]> = {
 };
 
 export const DEFAULT_ADMIN_USER: AuthUser = {
-  id: "usr-admin-01",
+  id: "be9f4073-f622-46ec-854e-e422e30ddbeb",
   username: "admin",
-  fullName: "Alexander Davis",
+  fullName: "Administrator",
   email: "admin@arkaa-digital.local",
   role: "SUPER_ADMIN",
   permissions: rolePermissionsMap["SUPER_ADMIN"],
@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthState>()(
       login: (username: string, role: UserRole = "SUPER_ADMIN") => {
         const fullName =
           username === "admin"
-            ? "Alexander Davis"
+            ? "Administrator"
             : username === "jdoe"
             ? "John Doe"
             : username.charAt(0).toUpperCase() + username.slice(1);
@@ -185,6 +185,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "edrms-auth-storage",
+      onRehydrateStorage: () => (state) => {
+        if (state?.user && state.user.username === "admin" && state.user.fullName === "Alexander Davis") {
+          state.user.fullName = "Administrator";
+        }
+      },
     }
   )
 );

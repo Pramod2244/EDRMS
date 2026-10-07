@@ -106,7 +106,7 @@ public class DocumentPipelineWorker {
         job = jobRepository.save(job);
 
         Document doc = documentRepository.findById(docId).orElse(null);
-        if (doc == null) {
+        if (doc == null || doc.getPurgedAt()!=null) {
             log.error("Document not found for pipeline processing: {}", docId);
             job.setStatus("FAILED");
             job.setErrorMessage("Document not found in repository");
@@ -333,7 +333,7 @@ public class DocumentPipelineWorker {
                         .contentType("image/png")
                         .build();
 
-                    storageService.getActiveProvider().store(thumbKey, new ByteArrayInputStream(thumbBytes), meta);
+                    storageService.getProvider(providerType).store(thumbKey, new ByteArrayInputStream(thumbBytes), meta);
                     thumbStorageKey = thumbKey;
 
                     // Update page 1 thumbnail key
@@ -351,7 +351,7 @@ public class DocumentPipelineWorker {
                             .documentVersionId(finalVersionId)
                             .documentPageId(pages.get(0).getId())
                             .assetType("THUMBNAIL")
-                            .storageProvider(storageService.getActiveProviderType().name())
+                            .storageProvider(providerType.name())
                             .storageKey(thumbKey)
                             .mimeType("image/png")
                             .extension("png")
@@ -405,7 +405,7 @@ public class DocumentPipelineWorker {
             // Stage 12: FINALIZE
             ProcessingJobStep step12 = startStep(job.getId(), "FINALIZE");
             doc.setStatus("READY");
-            doc.setPageCount(pages.size());
+            doc.setPageCount(pageCount);
             documentRepository.save(doc);
 
             job.setStatus("COMPLETED");

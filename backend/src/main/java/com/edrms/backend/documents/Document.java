@@ -31,6 +31,9 @@ public class Document {
     @Column(nullable = false, length = 255)
     private String name;
 
+    @Column(name = "reference_id", length = 100, updatable = false)
+    private String referenceId;
+
     @Column(name = "mime_type", nullable = false, length = 150)
     private String mimeType;
 
@@ -63,9 +66,15 @@ public class Document {
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, updatable = false)
     @Builder.Default
     private Boolean isDeleted = false;
+
+    // Managed by locked recycle-bin updates, so an older pipeline entity cannot undo deletion.
+    @Column(name="deleted_at",updatable=false) private OffsetDateTime deletedAt;
+    @Column(name="deleted_by",updatable=false) private UUID deletedBy;
+    @Column(name="purge_after",updatable=false) private OffsetDateTime purgeAfter;
+    @Column(name="purged_at",updatable=false) private OffsetDateTime purgedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

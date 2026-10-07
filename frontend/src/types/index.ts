@@ -21,6 +21,7 @@ export interface Folder {
 }
 
 export interface DocumentItem {
+  referenceId?: string;
   id: string;
   folderId: string | null;
   name: string;
@@ -30,6 +31,7 @@ export interface DocumentItem {
   currentVersion: number;
   status: "PENDING" | "PROCESSING" | "INDEXED" | "FAILED";
   storageProvider: "LOCAL" | "NAS" | "S3" | string;
+  storageKey?: string;
   pageCount: number | null;
   createdAt: string;
   fileUrl?: string;

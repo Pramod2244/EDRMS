@@ -106,6 +106,14 @@ public class ConfigurationService {
 
     @Transactional
     public void updateStorageConfig(StorageConfigRequest req) {
+        if ("NAS".equalsIgnoreCase(req.getProviderType()) ||
+            (storageService.getActiveProviderType() == StorageProviderType.NAS && req.getNasRootPath() != null)) {
+            Map<String, Object> probe = testStorage(StorageConfigRequest.builder()
+                .providerType("NAS").nasRootPath(req.getNasRootPath()).build());
+            if (!Boolean.TRUE.equals(probe.get("success"))) {
+                throw new IllegalArgumentException(String.valueOf(probe.get("message")));
+            }
+        }
         if (req.getProviderType() != null && !req.getProviderType().isBlank()) {
             StorageProviderType newType = StorageProviderType.valueOf(req.getProviderType().toUpperCase());
             storageService.setActiveProviderType(newType);
@@ -171,11 +179,14 @@ public class ConfigurationService {
             long start = System.currentTimeMillis();
             try {
                 Path p = Paths.get(pathStr).toAbsolutePath().normalize();
-                Files.createDirectories(p);
+                if (!Files.isDirectory(p)) {
+                    throw new IOException("NAS share does not exist or is unavailable. Connect the share on the backend host first.");
+                }
                 Path testFile = Files.createTempFile(p, "probe-nas-", ".tmp");
                 Files.writeString(testFile, "edms-nas-storage-probe-test");
                 String readContent = Files.readString(testFile);
                 Files.deleteIfExists(testFile);
+                if (!"edms-nas-storage-probe-test".equals(readContent)) throw new IOException("NAS read verification failed");
                 long latency = System.currentTimeMillis() - start;
                 return Map.of(
                     "success", true,
@@ -240,6 +251,10 @@ public class ConfigurationService {
 
     @Transactional
     public void switchStorageProvider(StorageProviderType newProvider) {
+        if (newProvider == StorageProviderType.NAS) {
+            Map<String, Object> probe = testStorage(StorageConfigRequest.builder().providerType("NAS").build());
+            if (!Boolean.TRUE.equals(probe.get("success"))) throw new IllegalArgumentException(String.valueOf(probe.get("message")));
+        }
         storageService.setActiveProviderType(newProvider);
         saveConfig("STORAGE_ACTIVE_PROVIDER", newProvider.name(), "STORAGE");
     }

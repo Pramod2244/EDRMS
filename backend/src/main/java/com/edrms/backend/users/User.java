@@ -33,6 +33,35 @@ public class User {
     @Column(name = "full_name")
     private String fullName;
 
+    @Column(name = "password_hash")
+    private String passwordHash;
+
+    @Column(name = "role", length = 50)
+    @Builder.Default
+    private String role = "CONTRIBUTOR";
+
+    @Column(name = "assigned_folder_ids", columnDefinition = "TEXT")
+    @Builder.Default
+    private String assignedFolderIds = "";
+
+    @Column(name = "accessible_menus", columnDefinition = "TEXT")
+    @Builder.Default
+    private String accessibleMenus = "/documents,/search";
+
+    @Column(name = "permissions", columnDefinition = "TEXT")
+    @Builder.Default
+    private String permissions = "";
+
+    @Column(name = "is_temporary")
+    @Builder.Default
+    private Boolean isTemporary = false;
+
+    @Column(name = "duration_seconds")
+    private Long durationSeconds;
+
+    @Column(name = "expires_at")
+    private OffsetDateTime expiresAt;
+
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String status = "ACTIVE";

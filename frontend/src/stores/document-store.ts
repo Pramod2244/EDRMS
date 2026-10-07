@@ -61,77 +61,15 @@ interface DocumentStoreState {
     checksum?: string
   ) => DocumentItem;
   deleteDocument: (documentId: string) => Promise<void>;
+  deleteDocumentPage: (documentId: string, pageNumber: number) => Promise<any[]>;
   ingestFromScanner: (deviceName: string, pageCount: number, folderId: string | null) => DocumentItem;
   setStorageProvider: (provider: "LOCAL" | "NAS" | "S3") => void;
   setOcrEngine: (engine: string) => void;
 }
 
-const initialFolders: FolderNode[] = [
-  { id: "11111111-1111-1111-1111-111111111111", name: "Corporate & Legal", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "11111111-1111-1111-1111-111111111112", name: "Contracts & Agreements", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
-  { id: "11111111-1111-1111-1111-111111111113", name: "NDAs & Compliance", parentId: "11111111-1111-1111-1111-111111111111", materializedPath: "/11111111-1111-1111-1111-111111111111/", depth: 1 },
-  { id: "22222222-2222-2222-2222-222222222221", name: "Finance & Accounts", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "22222222-2222-2222-2222-222222222222", name: "Audits 2026", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
-  { id: "22222222-2222-2222-2222-222222222223", name: "Invoices & Receipts", parentId: "22222222-2222-2222-2222-222222222221", materializedPath: "/22222222-2222-2222-2222-222222222221/", depth: 1 },
-  { id: "33333333-3333-3333-3333-333333333331", name: "Human Resources", parentId: null, materializedPath: "/", depth: 0 },
-  { id: "33333333-3333-3333-3333-333333333332", name: "Personnel Files", parentId: "33333333-3333-3333-3333-333333333331", materializedPath: "/33333333-3333-3333-3333-333333333331/", depth: 1 },
-  { id: "6a893dc0-2afe-4861-b355-0531a6e90836", name: "Corporate Contracts", parentId: null, materializedPath: "/", depth: 0 },
-];
+const initialFolders: FolderNode[] = [];
 
-const initialDocuments: DocumentItem[] = [
-  {
-    id: "doc-1",
-    folderId: "1-1",
-    name: "Q3_Vendor_Master_Contract.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 3450200,
-    currentVersion: 2,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 18,
-    createdAt: "2026-09-03 10:30",
-  },
-  {
-    id: "doc-2",
-    folderId: "2-1",
-    name: "Audited_Balance_Sheet_2026.xlsx",
-    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    extension: "xlsx",
-    fileSizeBytes: 1240900,
-    currentVersion: 1,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 4,
-    createdAt: "2026-09-03 11:15",
-  },
-  {
-    id: "doc-3",
-    folderId: "2-2",
-    name: "Scanned_Receipt_Receipts_ADF.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 5490200,
-    currentVersion: 1,
-    status: "PROCESSING",
-    storageProvider: "LOCAL",
-    pageCount: 8,
-    createdAt: "2026-09-03 11:45",
-  },
-  {
-    id: "doc-4",
-    folderId: null, // Root
-    name: "Enterprise_DMS_Architecture_Spec.pdf",
-    mimeType: "application/pdf",
-    extension: "pdf",
-    fileSizeBytes: 2180400,
-    currentVersion: 1,
-    status: "INDEXED",
-    storageProvider: "LOCAL",
-    pageCount: 12,
-    createdAt: "2026-09-03 12:00",
-  },
-];
+const initialDocuments: DocumentItem[] = [];
 
 export const useDocumentStore = create<DocumentStoreState>()(
   persist(
@@ -146,7 +84,11 @@ export const useDocumentStore = create<DocumentStoreState>()(
 
       fetchFolders: async () => {
         try {
-          const res = await fetch("/api/folders/all");
+          const token = typeof window !== "undefined" ? (localStorage.getItem("edrms_access_token") || useAuthStore.getState().token) : null;
+          const headers: Record<string, string> = {};
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+
+          const res = await fetch("/api/folders/all", { headers });
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
@@ -158,10 +100,12 @@ export const useDocumentStore = create<DocumentStoreState>()(
                 depth: f.depth,
               }));
               set((state) => {
-                const isValidCurrent = mapped.some((f) => f.id === state.selectedFolderId);
+                const isValidCurrent =
+                  state.selectedFolderId === null ||
+                  mapped.some((f) => f.id === state.selectedFolderId);
                 return {
                   folders: mapped,
-                  selectedFolderId: isValidCurrent ? state.selectedFolderId : mapped[0]?.id ?? null,
+                  selectedFolderId: isValidCurrent ? state.selectedFolderId : null,
                 };
               });
             }
@@ -174,26 +118,33 @@ export const useDocumentStore = create<DocumentStoreState>()(
       fetchDocuments: async () => {
         try {
           set({ isLoading: true });
-          const res = await fetch("/api/documents");
+          const token = typeof window !== "undefined" ? (localStorage.getItem("edrms_access_token") || useAuthStore.getState().token) : null;
+          const headers: Record<string, string> = {};
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+
+          const res = await fetch("/api/documents", { headers });
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
+              const liveDocs: DocumentItem[] = data.map((d: any) => ({
+                id: d.id,
+                folderId: d.folderId,
+                name: d.name,
+                referenceId: d.referenceId,
+                mimeType: d.mimeType,
+                extension: d.extension,
+                fileSizeBytes: d.fileSizeBytes,
+                currentVersion: d.currentVersion || 1,
+                status: d.status === "READY" ? "INDEXED" : d.status,
+                storageProvider: d.storageProvider || "LOCAL",
+                storageKey: d.storageKey || "",
+                pageCount: d.pageCount,
+                createdAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "Just now",
+                checksum: d.checksumSha256,
+                fileUrl: `/api/documents/${d.id}/preview`,
+              }));
               set({
-                documents: data.map((d: any) => ({
-                  id: d.id,
-                  folderId: d.folderId,
-                  name: d.name,
-                  mimeType: d.mimeType,
-                  extension: d.extension,
-                  fileSizeBytes: d.fileSizeBytes,
-                  currentVersion: d.currentVersion || 1,
-                  status: d.status === "READY" ? "INDEXED" : d.status,
-                  storageProvider: d.storageProvider || "LOCAL",
-                  pageCount: d.pageCount,
-                  createdAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "Just now",
-                  checksum: d.checksumSha256,
-                  fileUrl: `/api/documents/${d.id}/preview`,
-                })),
+                documents: liveDocs,
                 isLoading: false,
               });
               return;
@@ -214,43 +165,52 @@ export const useDocumentStore = create<DocumentStoreState>()(
         try {
           const isUUID = (str?: string | null) =>
             !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-          const sanitizedParentId = isUUID(parentId) && get().folders.some((folder) => folder.id === parentId)
-            ? parentId
-            : null;
+          const sanitizedParentId = isUUID(parentId) ? parentId : null;
           const res = await fetch("/api/folders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, parentId: sanitizedParentId }),
           });
-          if (!res.ok) {
-            const detail = await res.text();
-            let message = `Folder creation failed (HTTP ${res.status})`;
-            try {
-              const parsed = JSON.parse(detail);
-              message = parsed.message || parsed.error || message;
-            } catch {
-              if (detail && detail.length < 200) message = detail;
-            }
-            throw new Error(message);
+          if (res.ok) {
+            const created = await res.json();
+            const newFolder: FolderNode = {
+              id: created.id,
+              name: created.name,
+              parentId: created.parentId,
+              materializedPath: created.materializedPath,
+              depth: created.depth,
+            };
+            set((state) => ({
+              folders: [...state.folders, newFolder],
+              selectedFolderId: created.id,
+            }));
+            return newFolder;
           }
-
-          const created = await res.json();
-          const newFolder: FolderNode = {
-            id: created.id,
-            name: created.name,
-            parentId: created.parentId,
-            materializedPath: created.materializedPath,
-            depth: created.depth,
-          };
-          set((state) => ({
-            folders: [...state.folders, newFolder],
-            selectedFolderId: created.id,
-          }));
-          return newFolder;
         } catch (err) {
-          console.error("Backend folder creation failed:", err);
-          throw err;
+          console.warn("Backend create folder failed, falling back to local:", err);
         }
+
+        const id = `f-${Date.now()}`;
+        const parent = get().folders.find((f) => f.id === parentId);
+        const depth = parent ? parent.depth + 1 : 0;
+        const materializedPath = parent
+          ? `${parent.materializedPath}${id}/`
+          : `/${id}/`;
+
+        const newFolder: FolderNode = {
+          id,
+          name,
+          parentId,
+          materializedPath,
+          depth,
+        };
+
+        set((state) => ({
+          folders: [...state.folders, newFolder],
+          selectedFolderId: id,
+        }));
+
+        return newFolder;
       },
 
       deleteFolder: async (folderId: string) => {
@@ -328,12 +288,14 @@ export const useDocumentStore = create<DocumentStoreState>()(
           id: createdDoc.id,
           folderId: createdDoc.folderId,
           name: createdDoc.name,
+          referenceId: createdDoc.referenceId,
           mimeType: createdDoc.mimeType,
           extension: createdDoc.extension,
           fileSizeBytes: createdDoc.fileSizeBytes,
           currentVersion: createdDoc.currentVersion || 1,
           status: "PROCESSING",
           storageProvider: createdDoc.storageProvider || "LOCAL",
+          storageKey: createdDoc.storageKey || "",
           pageCount: createdDoc.pageCount || 1,
           createdAt: "Just now",
           checksum: createdDoc.checksumSha256,
@@ -418,14 +380,36 @@ export const useDocumentStore = create<DocumentStoreState>()(
       },
 
       deleteDocument: async (documentId: string) => {
-        try {
-          await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
-        } catch (err) {
-          console.warn("Backend delete doc error:", err);
-        }
+        const token=useAuthStore.getState().token || localStorage.getItem("edrms_access_token");
+        const response=await fetch(`/api/documents/${documentId}`, { method: "DELETE",headers:token?{Authorization:`Bearer ${token}`}:{},signal:AbortSignal.timeout(15000) });
+        if(!response.ok)throw new Error((await response.json()).message || "Unable to move document to Recycle Bin");
         set((state) => ({
           documents: state.documents.filter((d) => d.id !== documentId),
         }));
+      },
+
+      deleteDocumentPage: async (documentId: string, pageNumber: number) => {
+        const res = await fetch(`/api/documents/${documentId}/pages/${pageNumber}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `Failed to delete page ${pageNumber}`);
+        }
+        const updatedPages = await res.json();
+        set((state) => ({
+          documents: state.documents.map((d) =>
+            d.id === documentId
+              ? {
+                  ...d,
+                  pageCount: Array.isArray(updatedPages)
+                    ? updatedPages.length
+                    : Math.max(1, (d.pageCount || 1) - 1),
+                }
+              : d
+          ),
+        }));
+        return updatedPages;
       },
 
       ingestFromScanner: (deviceName: string, pageCount: number, folderId: string | null) => {
@@ -472,6 +456,13 @@ export const useDocumentStore = create<DocumentStoreState>()(
     }),
     {
       name: "edrms-document-storage",
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.documents = (state.documents || []).filter(
+            (d) => d.id && !d.id.startsWith("doc-") && !d.id.startsWith("scan-")
+          );
+        }
+      },
     }
   )
 );

@@ -26,6 +26,14 @@ public class Role {
     @Column(length = 255)
     private String description;
 
+    @Column(name = "permissions_csv", nullable = false)
+    @Builder.Default
+    private String permissionsCsv = "";
+
+    @Column(name = "menus_csv", nullable = false)
+    @Builder.Default
+    private String menusCsv = "/documents,/search";
+
     @Column(name = "is_system", nullable = false)
     @Builder.Default
     private Boolean isSystem = true;

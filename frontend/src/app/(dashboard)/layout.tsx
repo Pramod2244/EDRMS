@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Folder,
+  Trash2,
   Search,
   ShieldAlert,
   Sliders,
@@ -32,7 +33,47 @@ export default function DashboardLayout({
   const { user, sessionExpiresAt, logout, switchRole, setSessionDuration, extendSession } = useAuthStore();
 
   // Active user: always guarantees the profile & logout menu is present inside the system
-  const activeUser = user || DEFAULT_ADMIN_USER;
+  const rawUser = user || DEFAULT_ADMIN_USER;
+  const activeUser = {
+    ...rawUser,
+    fullName: rawUser.fullName === "Alexander Davis" ? "Administrator" : (rawUser.fullName || rawUser.username),
+  };
+
+  // Sync live profile from database (/api/auth/me) so real database name (Administrator) is always displayed
+  useEffect(() => {
+    async function syncProfile() {
+      try {
+        const token = localStorage.getItem("edrms_access_token") || user?.token;
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch("/api/auth/me", { headers });
+        if (res.ok) {
+          const profile = await res.json();
+          if (profile && profile.username) {
+            useAuthStore.setState((state) => {
+              if (!state.user) return state;
+              return {
+                user: {
+                  ...state.user,
+                  fullName: profile.fullName || state.user.fullName,
+                  email: profile.email || state.user.email,
+                  role: profile.role || state.user.role,
+                  permissions: profile.permissions || state.user.permissions,
+                  assignedFolderIds: profile.assignedFolderIds || state.user.assignedFolderIds,
+                  accessibleMenus: profile.accessibleMenus || state.user.accessibleMenus,
+                },
+              };
+            });
+          }
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    }
+    syncProfile();
+  }, []);
 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dismissedTier, setDismissedTier] = useState<string | null>(null);
@@ -130,6 +171,9 @@ export default function DashboardLayout({
       allowedRoles: ["SUPER_ADMIN", "DEPARTMENT_MANAGER", "CONTRIBUTOR", "AUDITOR", "VIEWER"],
     },
     {
+      name: "Recycle Bin", href: "/recycle-bin", icon: Trash2, allowedRoles: ["SUPER_ADMIN"],
+    },
+    {
       name: "Audit Logs",
       href: "/audit",
       icon: ShieldAlert,
@@ -145,6 +189,7 @@ export default function DashboardLayout({
 
   const currentRole = activeUser.role;
   const navLinks = allNavLinks.filter((link) => {
+    if(link.href==="/recycle-bin")return currentRole==="SUPER_ADMIN" || (activeUser.permissions?.includes("DELETE") && activeUser.accessibleMenus?.includes("/documents"));
     if (activeUser.accessibleMenus && activeUser.accessibleMenus.length > 0) {
       return activeUser.accessibleMenus.includes(link.href);
     }
@@ -227,6 +272,7 @@ export default function DashboardLayout({
                   ? "Repository Files"
                   : pathname === "/search"
                     ? "Full-Text Search"
+                    : pathname === "/recycle-bin" ? "Recycle Bin"
                     : pathname === "/audit"
                       ? "Compliance Audit Trail"
                       : pathname === "/admin"
@@ -453,7 +499,7 @@ export default function DashboardLayout({
 
         {/* Main Content Body */}
         <main className="flex-1 min-h-0 overflow-hidden px-6 py-5 lg:px-8 lg:py-6 bg-slate-50 flex flex-col justify-between">
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
             {isCurrentRouteAllowed ? (
               children
             ) : (

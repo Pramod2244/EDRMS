@@ -19,7 +19,7 @@ public class NasStorageProvider implements StorageProvider {
 
     private volatile Path rootPath;
 
-    public NasStorageProvider(@Value("${edrms.storage.nas.root-path:/Volumes/NAS/edms_storage}") String rootDir) {
+    public NasStorageProvider(@Value("${edrms.storage.nas.root-path:./data/nas_storage}") String rootDir) {
         reconfigure(rootDir);
     }
 
@@ -28,12 +28,7 @@ public class NasStorageProvider implements StorageProvider {
             rootDir = "./data/nas_storage";
         }
         this.rootPath = Paths.get(rootDir).toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(this.rootPath);
-            log.info("NAS Storage Provider initialized at path: {}", this.rootPath);
-        } catch (IOException e) {
-            log.warn("Could not create NAS storage directory at {} (will retry when mounted): {}", this.rootPath, e.getMessage());
-        }
+        log.info("NAS path configured at {}. The share must already be accessible to the backend service.", this.rootPath);
     }
 
     public String getRootPathString() {
@@ -43,12 +38,13 @@ public class NasStorageProvider implements StorageProvider {
     @Override
     public StorageResult store(String key, InputStream inputStream, StorageMetadata metadata) {
         Path targetPath = resolveAndValidate(key);
+        Path tempPath = null;
         try {
             if (targetPath.getParent() != null) {
                 Files.createDirectories(targetPath.getParent());
             }
 
-            Path tempPath = Files.createTempFile(targetPath.getParent(), "nas-upload-", ".tmp");
+            tempPath = Files.createTempFile(targetPath.getParent(), "nas-upload-", ".tmp");
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             long bytesWritten;
 
@@ -71,15 +67,20 @@ public class NasStorageProvider implements StorageProvider {
                 .build();
         } catch (Exception e) {
             throw new RuntimeException("Failed to store file in NAS storage key: " + key + " (path: " + targetPath + ")", e);
+        } finally {
+            if (tempPath != null) {
+                try { Files.deleteIfExists(tempPath); }
+                catch (IOException e) { log.warn("Could not clean up NAS upload temporary file: {}", tempPath); }
+            }
         }
     }
 
     @Override
     public InputStream load(String key) {
-        Path targetPath = resolveAndValidate(key);
-        if (!Files.exists(targetPath)) {
-            throw new RuntimeException("File not found in External NAS Box storage: " + key + " at path " + targetPath);
-        }
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+
+        Path targetPath = resolveAndValidate(cleanKey);
         try {
             return new BufferedInputStream(Files.newInputStream(targetPath));
         } catch (IOException e) {
@@ -99,7 +100,9 @@ public class NasStorageProvider implements StorageProvider {
 
     @Override
     public boolean exists(String key) {
-        return Files.exists(resolveAndValidate(key));
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+        return Files.exists(resolveAndValidate(cleanKey));
     }
 
     @Override
@@ -133,7 +136,13 @@ public class NasStorageProvider implements StorageProvider {
     }
 
     private Path resolveAndValidate(String key) {
-        Path target = this.rootPath.resolve(key).normalize();
+        if (!Files.isDirectory(this.rootPath)) {
+            throw new IllegalStateException("NAS share is unavailable. Mount or connect the configured share before accessing documents.");
+        }
+        if (key == null || key.isBlank()) throw new IllegalArgumentException("Storage key is required");
+        String cleanKey = key;
+        while (cleanKey.startsWith("/")) cleanKey = cleanKey.substring(1);
+        Path target = this.rootPath.resolve(cleanKey).normalize();
         if (!target.startsWith(this.rootPath)) {
             throw new SecurityException("Path Traversal detected for NAS storage key: " + key);
         }

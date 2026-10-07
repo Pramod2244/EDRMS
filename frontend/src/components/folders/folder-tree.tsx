@@ -26,7 +26,7 @@ export default function FolderTree({
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedNodes((prev) => ({ ...prev, [id]: !(prev[id] ?? folders.find(folder=>folder.id===id)?.parentId === null) }));
   };
 
   const [folderToDelete, setFolderToDelete] = useState<FolderNode | null>(null);
@@ -49,70 +49,50 @@ export default function FolderTree({
     return new Set(user.assignedFolderIds);
   }, [user]);
 
-  // Determine which folders to display based on assigned permissions
+  const [folderQuery, setFolderQuery] = useState("");
+  const byId = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
   const visibleFolders = useMemo(() => {
-    if (!assignedIds) return folders;
-
-    // A folder is visible if:
-    // 1. It is directly assigned to the user
-    // 2. OR an ancestor is assigned
-    // 3. OR a descendant is assigned
-    return folders.filter((folder) => {
-      if (assignedIds.has(folder.id)) return true;
-
-      // Check ancestors
-      let curParent = folder.parentId;
-      while (curParent) {
-        if (assignedIds.has(curParent)) return true;
-        const pFolder = folders.find((f) => f.id === curParent);
-        curParent = pFolder ? pFolder.parentId : null;
+    const visible = new Set<string>();
+    const includeAncestors = (folder: FolderNode) => {
+      let current: FolderNode | undefined = folder;
+      const visited = new Set<string>();
+      while (current && !visible.has(current.id) && !visited.has(current.id)) {
+        visited.add(current.id); visible.add(current.id);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
       }
-
-      // Check descendants
-      const hasAssignedDescendant = (fId: string): boolean => {
-        const children = folders.filter((f) => f.parentId === fId);
-        for (const ch of children) {
-          if (assignedIds.has(ch.id) || hasAssignedDescendant(ch.id)) return true;
-        }
-        return false;
-      };
-
-      return hasAssignedDescendant(folder.id);
-    });
-  }, [folders, assignedIds]);
-
-  // Build recursive tree from visible list of folders
-  const buildTree = (parentId: string | null = null): FolderNode[] => {
-    // If root level and parentId is null, but visible folders have no root folder directly visible,
-    // we want to list the highest visible folders
-    if (parentId === null && assignedIds) {
-      const topLevelVisible = visibleFolders.filter((f) => {
-        if (f.parentId === null) return true;
-        // If its parent is NOT in visibleFolders, treat it as a top-level node for this user
-        return !visibleFolders.some((vf) => vf.id === f.parentId);
-      });
-      return topLevelVisible;
+    };
+    for (const folder of folders) {
+      if ((!assignedIds || assignedIds.has(folder.id)) && (!folderQuery.trim() || folder.name.toLowerCase().includes(folderQuery.trim().toLowerCase()))) includeAncestors(folder);
     }
-
-    return visibleFolders.filter((f) => f.parentId === parentId);
-  };
-
+    return folders.filter((folder) => visible.has(folder.id));
+  }, [folders, assignedIds, byId, folderQuery]);
+  const childrenIndex = useMemo(() => {
+    const index = new Map<string | null, FolderNode[]>();
+    const visibleIds = new Set(visibleFolders.map((folder) => folder.id));
+    for (const folder of visibleFolders) {
+      const parent = folder.parentId && visibleIds.has(folder.parentId) ? folder.parentId : null;
+      const siblings = index.get(parent) || [];
+      siblings.push(folder); index.set(parent, siblings);
+    }
+    return index;
+  }, [visibleFolders]);
+  const buildTree = (parentId: string | null = null): FolderNode[] => childrenIndex.get(parentId) || [];
   const renderNodes = (parentId: string | null = null) => {
     const nodes = buildTree(parentId);
     if (nodes.length === 0) return null;
 
     return (
-      <ul className="space-y-1 pl-2.5">
+      <ul className={`space-y-1 ${parentId ? "ml-4 pl-2 border-l border-slate-200" : "pl-0"}`}>
         {nodes.map((node) => {
-          const isExpanded = !!expandedNodes[node.id];
+          const isExpanded = (expandedNodes[node.id] ?? node.parentId === null) || !!folderQuery.trim();
           const isSelected = selectedFolderId === node.id;
-          const children = visibleFolders.filter((f) => f.parentId === node.id);
+          const children = childrenIndex.get(node.id) || [];
           const hasChildren = children.length > 0;
 
           return (
             <li key={node.id}>
               <div
-                onClick={() => onSelectFolder(node.id)}
+                onClick={() => { if (!assignedIds || assignedIds.has(node.id)) onSelectFolder(node.id); }}
                 className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${
                   isSelected
                     ? "bg-orange-50 text-orange-800 font-bold border border-orange-200 shadow-2xs"
@@ -122,6 +102,8 @@ export default function FolderTree({
                 <div className="flex items-center space-x-2 truncate">
                   {hasChildren ? (
                     <button
+                      aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.name}`}
+                      aria-expanded={isExpanded}
                       onClick={(e) => toggleExpand(node.id, e)}
                       className="p-0.5 hover:bg-slate-200/60 rounded text-slate-400 hover:text-slate-700 transition"
                     >
@@ -140,7 +122,8 @@ export default function FolderTree({
                   ) : (
                     <Folder className="h-4 w-4 text-slate-400 shrink-0 group-hover:text-slate-600" />
                   )}
-                  <span className="truncate">{node.name}</span>
+                  <span className="truncate" title={node.name}>{node.name}</span>
+                  {assignedIds && !assignedIds.has(node.id) && <Lock className="h-3 w-3 text-slate-400" aria-label="Parent folder for navigation only" />}
                 </div>
 
                 {canDeleteFolder && (
@@ -164,6 +147,7 @@ export default function FolderTree({
 
   return (
     <div className="space-y-1.5">
+      <input aria-label="Find a folder" placeholder="Find a folder…" value={folderQuery} onChange={(event) => setFolderQuery(event.target.value)} className="w-full rounded-lg border px-3 py-2 text-xs mb-2" />
       <div
         onClick={() => onSelectFolder(null)}
         className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${

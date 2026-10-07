@@ -52,22 +52,28 @@ class FileValidationServiceTest {
     }
 
     @Test
-    void testValidTextFileInspection() throws IOException {
+    void testValidPdfFileInspection() throws IOException {
         when(documentRepository.existsByChecksumSha256AndIsDeletedFalse(anyString())).thenReturn(false);
 
-        byte[] content = "Hello EDRMS Document Management System!".getBytes();
+        byte[] content;
+        try (org.apache.pdfbox.pdmodel.PDDocument pdf = new org.apache.pdfbox.pdmodel.PDDocument();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            pdf.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            pdf.save(out);
+            content = out.toByteArray();
+        }
         MockMultipartFile file = new MockMultipartFile(
             "file",
-            "test_document.txt",
-            "text/plain",
+            "test_document.pdf",
+            "application/pdf",
             content
         );
 
         FileValidationResult result = fileValidationService.validateAndInspect(file);
 
         assertNotNull(result);
-        assertEquals("test_document.txt", result.getSanitizedFilename());
-        assertEquals("txt", result.getExtension());
+        assertEquals("test_document.pdf", result.getSanitizedFilename());
+        assertEquals("pdf", result.getExtension());
         assertNotNull(result.getChecksumSha256());
         assertEquals(64, result.getChecksumSha256().length());
         assertFalse(result.isDuplicate());

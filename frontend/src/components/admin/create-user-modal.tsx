@@ -18,7 +18,7 @@ import {
   Layers,
 } from "lucide-react";
 import { FolderNode } from "@/stores/document-store";
-import { UserRole } from "@/stores/auth-store";
+import { UserRole, useAuthStore } from "@/stores/auth-store";
 
 export interface EditableUser {
   id?: string;
@@ -90,6 +90,24 @@ export default function CreateUserModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [roleCatalog, setRoleCatalog] = useState<Array<{name: string; permissions: string[]; menus: string[]}>>([]);
+  const folderChildren = useMemo(() => {
+    const index = new Map<string | null, FolderNode[]>();
+    for (const folder of availableFolders) {
+      const key = folder.parentId || null;
+      index.set(key, [...(index.get(key) || []), folder]);
+    }
+    return index;
+  }, [availableFolders]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    const token = useAuthStore.getState().token || localStorage.getItem("edrms_access_token");
+    fetch("/api/roles", { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal })
+      .then(async (response) => { if (response.ok) setRoleCatalog(await response.json()); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [isOpen]);
   // Initialize or reset form state on open or when userToEdit changes
   useEffect(() => {
     if (!isOpen) return;
@@ -104,11 +122,11 @@ export default function CreateUserModal({
       const hasFolders = userToEdit.assignedFolderIds && userToEdit.assignedFolderIds.length > 0;
       setFolderMode(hasFolders ? "specific" : "all");
       setSelectedFolderIds(userToEdit.assignedFolderIds || []);
-      setPermissions(userToEdit.permissions && userToEdit.permissions.length > 0
+      setPermissions(userToEdit.permissions != null
         ? userToEdit.permissions
         : DEFAULT_ROLE_PERMS[(userToEdit.role as UserRole) || "CONTRIBUTOR"] || ["VIEW"]);
 
-      const initialMenus = userToEdit.accessibleMenus && userToEdit.accessibleMenus.length > 0
+      const initialMenus = userToEdit.accessibleMenus != null
         ? userToEdit.accessibleMenus
         : DEFAULT_ROLE_MENUS[(userToEdit.role as UserRole) || "CONTRIBUTOR"] || ["/documents", "/search"];
       
@@ -156,7 +174,7 @@ export default function CreateUserModal({
     // Expand all top-level folders by default
     const initExpanded: Record<string, boolean> = {};
     availableFolders.forEach((f) => {
-      initExpanded[f.id] = true;
+      if (!f.parentId) initExpanded[f.id] = true;
     });
     setExpandedFolderIds(initExpanded);
     setErrorMsg(null);
@@ -166,8 +184,8 @@ export default function CreateUserModal({
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
-    setPermissions(DEFAULT_ROLE_PERMS[newRole] || ["VIEW"]);
-    setAccessibleMenus(DEFAULT_ROLE_MENUS[newRole] || ["/documents", "/search"]);
+    setPermissions(roleCatalog.find((entry) => entry.name === newRole)?.permissions ?? DEFAULT_ROLE_PERMS[newRole] ?? ["VIEW"]);
+    setAccessibleMenus(roleCatalog.find((entry) => entry.name === newRole)?.menus ?? DEFAULT_ROLE_MENUS[newRole] ?? ["/documents", "/search"]);
   };
 
   const toggleMenuAccess = (menuId: string) => {
@@ -185,56 +203,10 @@ export default function CreateUserModal({
     );
   };
 
-  // Helper: Find all descendant IDs of a folder recursively
-  const getAllDescendantIds = (folderId: string): string[] => {
-    const directChildren = availableFolders.filter((f) => f.parentId === folderId);
-    let descendants: string[] = directChildren.map((c) => c.id);
-    for (const child of directChildren) {
-      descendants = descendants.concat(getAllDescendantIds(child.id));
-    }
-    return descendants;
+  const handleFolderCheckToggle = (folderId: string) => {
+    setSelectedFolderIds((previous) => previous.includes(folderId)
+      ? previous.filter((id) => id !== folderId) : [...previous, folderId]);
   };
-
-  // Parent-Child folder selection handler:
-  // When checking parent: automatically checks parent AND all child folders!
-  // When user unchecks a specific child: only that child is removed.
-  // When user unchecks a parent: parent and its descendants are removed.
-  const handleFolderCheckToggle = (folderId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-
-    const isCurrentlyChecked = selectedFolderIds.includes(folderId);
-    const descendantIds = getAllDescendantIds(folderId);
-
-    if (!isCurrentlyChecked) {
-      // User is checking this folder: grant access to this folder AND ALL its descendants!
-      const nextSet = new Set([...selectedFolderIds, folderId, ...descendantIds]);
-      setSelectedFolderIds(Array.from(nextSet));
-
-      // Auto-expand parent and descendant folders so administrator can inspect and uncheck specific children
-      setExpandedFolderIds((prev) => {
-        const next = { ...prev, [folderId]: true };
-        for (const dId of descendantIds) {
-          next[dId] = true;
-        }
-        return next;
-      });
-    } else {
-      // User is unchecking:
-      // If it has descendants, remove this folder and all descendants so parent clear also cleans subtree
-      const toRemove = new Set([folderId, ...descendantIds]);
-      setSelectedFolderIds(selectedFolderIds.filter((id) => !toRemove.has(id)));
-    }
-  };
-
-  // Dedicated single-folder toggle (e.g. unchecking just one child)
-  const handleIndividualFolderToggle = (folderId: string) => {
-    if (selectedFolderIds.includes(folderId)) {
-      setSelectedFolderIds(selectedFolderIds.filter((id) => id !== folderId));
-    } else {
-      setSelectedFolderIds([...selectedFolderIds, folderId]);
-    }
-  };
-
   const toggleExpand = (folderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedFolderIds((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
@@ -242,7 +214,7 @@ export default function CreateUserModal({
 
   // Recursive tree builder
   const getChildFolders = (parentId: string | null): FolderNode[] => {
-    return availableFolders.filter((f) => f.parentId === parentId);
+    return folderChildren.get(parentId) || [];
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -342,9 +314,7 @@ export default function CreateUserModal({
           const hasChildren = children.length > 0;
           const isExpanded = !!expandedFolderIds[node.id];
 
-          // Check how many descendants are checked
-          const descendants = getAllDescendantIds(node.id);
-          const checkedDescendantsCount = descendants.filter((id) => selectedFolderIds.includes(id)).length;
+
 
           return (
             <div key={node.id} className="space-y-1">
@@ -382,7 +352,7 @@ export default function CreateUserModal({
                 <div className="flex items-center space-x-2 shrink-0">
                   {hasChildren && (
                     <span className="text-[10px] text-slate-400 font-mono">
-                      {checkedDescendantsCount}/{descendants.length} subfolders
+                      {children.length} folders
                     </span>
                   )}
                   {isChecked && (
@@ -402,8 +372,8 @@ export default function CreateUserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl my-8 p-6 space-y-5 shadow-2xl animate-in fade-in-50 zoom-in-95 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl p-4 sm:p-6 gap-4 shadow-2xl animate-in fade-in-50 zoom-in-95 h-[94dvh] max-h-[960px] flex flex-col">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
           <div className="flex items-center space-x-3">
@@ -437,7 +407,7 @@ export default function CreateUserModal({
         )}
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto pr-1 flex-1 text-left text-xs">
+        <form id="repository-user-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto min-h-0 pr-2 flex-1 text-left text-sm">
           {/* Account Credentials */}
           <div className="space-y-3">
             <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-orange-700">
@@ -533,6 +503,7 @@ export default function CreateUserModal({
                 <option value="DEPARTMENT_MANAGER">Department Manager (Full Department Admin)</option>
                 <option value="AUDITOR">Auditor (Compliance &amp; Audit Logs)</option>
                 <option value="SUPER_ADMIN">Super Administrator (Full System Access)</option>
+                {roleCatalog.filter((entry) => !Object.keys(DEFAULT_ROLE_PERMS).includes(entry.name)).map((entry) => <option key={entry.name} value={entry.name}>{entry.name.replaceAll("_", " ")}</option>)}
               </select>
             </div>
           </div>
@@ -649,7 +620,7 @@ export default function CreateUserModal({
                     Hierarchical Folder Directory:
                   </span>
                   <span className="text-[10px] text-slate-500">
-                    Checking a parent automatically checks all children. Uncheck any subfolder to customize.
+                    Select individual folders. Selecting a parent does not select its child folders.
                   </span>
                 </div>
 
@@ -764,6 +735,7 @@ export default function CreateUserModal({
             </p>
           </div>
 
+        </form>
           {/* Modal Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
             <button
@@ -774,7 +746,7 @@ export default function CreateUserModal({
               Cancel
             </button>
             <button
-              type="submit"
+              type="submit" form="repository-user-form"
               disabled={isSubmitting}
               className="px-5 py-2 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 transition shadow-xs flex items-center space-x-1.5 disabled:opacity-60"
             >
@@ -782,7 +754,7 @@ export default function CreateUserModal({
               <span>{isSubmitting ? "Saving..." : isEditing ? "Update User" : "Create User"}</span>
             </button>
           </div>
-        </form>
+
       </div>
     </div>
   );

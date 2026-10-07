@@ -5,7 +5,9 @@ import FolderTree from "@/components/folders/folder-tree";
 import DocumentTable from "@/components/documents/document-table";
 import UploadDocumentModal from "@/components/documents/upload-document-modal";
 import CreateFolderModal from "@/components/folders/create-folder-modal";
-import MobileScanQrModal from "@/components/scanner/mobile-scan-qr-modal";
+import dynamic from "next/dynamic";
+const MobileScanQrModal = dynamic(() => import("@/components/scanner/mobile-scan-qr-modal"), { ssr: false });
+const FolderNumbering = dynamic(() => import("@/components/folders/folder-numbering"), { ssr: false });
 import { FolderPlus, UploadCloud, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -17,6 +19,7 @@ export default function DocumentsPage() {
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [isMobileQrOpen, setIsMobileQrOpen] = useState(false);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
+  const [numberingOpen,setNumberingOpen]=useState(false);
 
   useEffect(() => {
     fetchFolders();
@@ -46,7 +49,8 @@ export default function DocumentsPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
+          {(user?.role==="SUPER_ADMIN" || user?.permissions?.includes("MANAGE_PERMISSIONS")) && <button onClick={()=>setNumberingOpen(true)} className="border border-slate-300 bg-white rounded-lg px-3 py-1.5 text-xs font-semibold">Folder numbering</button>}
           {/* Folders Toggle Button */}
           <button
             onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
@@ -112,7 +116,7 @@ export default function DocumentsPage() {
         >
           <div className="flex items-center justify-between mb-2.5 px-1 shrink-0">
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Folder Directory
+              Folder Tree
             </h2>
             <div className="flex items-center gap-1">
               {canCreateFolder && (
@@ -163,15 +167,16 @@ export default function DocumentsPage() {
       />
 
       {/* Modals */}
+      {numberingOpen && <FolderNumbering initialFolderId={selectedFolderId} onClose={()=>setNumberingOpen(false)}/>}
       <CreateFolderModal
         isOpen={isCreateFolderOpen}
         onClose={() => setIsCreateFolderOpen(false)}
       />
 
-      <MobileScanQrModal
+      {isMobileQrOpen && <MobileScanQrModal
         isOpen={isMobileQrOpen}
         onClose={() => setIsMobileQrOpen(false)}
-      />
+      />}
     </div>
   );
 }
